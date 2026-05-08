@@ -1,0 +1,120 @@
+# docker-compose.yml
+# Chạy Airflow locally với CeleryExecutor (production-like)
+# Dùng: docker compose up -d
+
+version: '3.8'
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.1-python3.11
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+    GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/secrets/gcp-sa-key.json
+    _PIP_ADDITIONAL_REQUIREMENTS: >-
+      apache-airflow-providers-google==10.13.1
+      xgboost==2.0.3
+      scikit-learn==1.4.0
+      h3==3.7.7
+      pandas==2.1.4
+      google-cloud-bigquery[pandas]==3.17.2
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./scripts:/opt/airflow/scripts
+    - ./config:/opt/airflow/config
+    - ./logs:/opt/airflow/logs
+    - ./secrets:/opt/airflow/secrets:ro
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - airflow-net
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+    networks:
+      - airflow-net
+
+  airflow-init:
+    <<: *airflow-common
+    command: >
+      bash -c "
+        airflow db upgrade &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com
+      "
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: unless-stopped
+
+  # ── SERVING LAYER ─────────────────────────────────────────────────────────
+
+  # Flask: export BigQuery → GeoJSON sau mỗi lần pipeline chạy xong
+  exporter:
+    build:
+      context: ./serving
+      dockerfile: Dockerfile.exporter
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-sa-key.json
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      BQ_DATASET: ${BQ_DATASET}
+    volumes:
+      - ./secrets:/secrets:ro
+      - exports-data:/exports          # share với dashboard
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    networks:
+      - airflow-net
+
+  # Nginx: serve dashboard HTML + GeoJSON exports
+  dashboard:
+    image: nginx:1.25-alpine
+    volumes:
+      - ./serving/html:/usr/share/nginx/html:ro
+      - ./serving/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - exports-data:/usr/share/nginx/html/exports:ro   # same volume, read-only
+    ports:
+      - "3000:80"
+    depends_on:
+      - exporter
+    restart: unless-stopped
+    networks:
+      - airflow-net
+
+volumes:
+  postgres-db:
+  exports-data:    # ← volume dùng chung giữa exporter và dashboard
+
+networks:
+  airflow-net:
+    driver: bridge
