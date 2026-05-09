@@ -1,7 +1,5 @@
 # 🔍 CDASH – Crime Data Analytics & Spatial Hotspot Detection System
 
-> Nền tảng phân tích dữ liệu tội phạm và phát hiện điểm nóng không gian, xây dựng trên Google Cloud Platform với mô hình học máy XGBoost và trực quan hóa 3D tương tác.
-
 **Trường Đại học Công nghệ – Đại học Quốc gia Hà Nội**  
 Giảng viên hướng dẫn: PGS.TS. Nguyễn Ngọc Hóa
 
@@ -15,17 +13,17 @@ Giảng viên hướng dẫn: PGS.TS. Nguyễn Ngọc Hóa
 
 ## 📋 Mục lục
 
-- [Tổng quan](#-tổng-quan)
-- [Kiến trúc hệ thống](#-kiến-trúc-hệ-thống)
-- [Công nghệ sử dụng](#-công-nghệ-sử-dụng)
-- [Cấu trúc dữ liệu](#-cấu-trúc-dữ-liệu)
-- [Cài đặt](#-cài-đặt)
-- [Vận hành](#-vận-hành)
-- [Xử lý lỗi](#-xử-lý-lỗi)
+1. [Tổng quan](#-tổng-quan)
+2. [Kiến trúc hệ thống](#-kiến-trúc-hệ-thống)
+3. [Công nghệ sử dụng](#-công-nghệ-sử-dụng)
+4. [Cấu trúc dữ liệu](#-cấu-trúc-dữ-liệu)
+5. [Cài đặt](#-cài-đặt)
+6. [Vận hành](#-vận-hành)
+7. [Xử lý lỗi](#-xử-lý-lỗi)
 
 ---
 
-## 🌆 Tổng quan
+## 🌆 1. Tổng quan
 
 CDASH là một hệ thống **Data Lakehouse** triển khai trên đám mây, giải quyết bài toán phân tích dữ liệu tội phạm đô thị theo hướng chủ động thay vì phản ứng thụ động. Hệ thống xử lý dữ liệu tội phạm thành phố Chicago từ năm 2001 đến hiện tại (hàng chục triệu bản ghi), kết hợp với dữ liệu thời tiết và kinh tế - xã hội để dự báo điểm nóng tội phạm theo thời gian thực.
 
@@ -46,7 +44,7 @@ CDASH là một hệ thống **Data Lakehouse** triển khai trên đám mây, g
 
 ---
 
-## 🏗️ Kiến trúc hệ thống
+## 🏗️ 2. Kiến trúc hệ thống
 
 Hệ thống theo kiến trúc **Medallion Architecture** với 3 tầng triển khai và 6 stage xử lý dữ liệu.
 
@@ -82,7 +80,7 @@ Hệ thống theo kiến trúc **Medallion Architecture** với 3 tầng triển
 
 ---
 
-## 🛠️ Công nghệ sử dụng
+## 🛠️ 3. Công nghệ sử dụng
 
 | Thành phần | Công nghệ | Vai trò |
 |---|---|---|
@@ -108,7 +106,7 @@ Kepler.gl  >= 2.5
 
 ---
 
-## 🗄️ Cấu trúc dữ liệu
+## 🗄️ 4. Cấu trúc dữ liệu
 
 Dữ liệu trong BigQuery theo mô hình **Star Schema** với 5 bảng chính:
 
@@ -151,7 +149,7 @@ prediction_results       ← Kết quả dự báo XGBoost
 
 ---
 
-## ⚙️ Cài đặt
+## ⚙️ 5. Cài đặt
 
 ### Yêu cầu tiên quyết
 
@@ -233,7 +231,7 @@ gs://cdash-data-lake/
 
 ---
 
-## 🚀 Vận hành
+## 🚀 6. Vận hành
 
 ### Kích hoạt pipeline lần đầu
 
@@ -271,7 +269,7 @@ Mô hình được retrain **hàng tuần** với dữ liệu 30 ngày gần nh�
 
 ---
 
-## 🔧 Xử lý lỗi
+## 🔧 7. Xử lý lỗi
 
 | Lỗi | Nguyên nhân | Cách khắc phục |
 |---|---|---|
