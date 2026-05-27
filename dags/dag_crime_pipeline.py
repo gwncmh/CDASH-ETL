@@ -5,26 +5,21 @@ DAG chính điều phối toàn bộ Crime Analytics Pipeline.
 
 Lịch chạy: Mỗi Chủ Nhật lúc 2:00 SA (UTC+7)
 
-Thứ tự task (so với phiên bản cũ, có 2 thay đổi):
-  [1] THÊM task ingest_chicago_crime (Stage 1) chạy song song với weather/socio
-  [2] BỎ task bq_create_enriched_table (ENRICH_SQL) –
-      Stage 4 Gold PySpark đã JOIN đủ weather + socio + POI và ghi thẳng lên BQ
-
 Dependency graph:
   start
     ├─► ingest_chicago_crime       (Stage 1: BQ Public Data → GCS)
     ├─► ingest_weather             (NOAA → BQ dim_weather)
-    ├─► ingest_socioeconomic       (Chicago Portal → BQ dim_socioeconomic)
+    ├─► ingest_socioeconomic       (Census ACS API → BQ dim_socioeconomic)
+    ├─► ingest_poi                 (OpenStreetMap → GCS)
     └─► create_dataproc_cluster
-          ├─► etl_bronze           (Stage 2: CSV → Parquet Bronze)
-          │     └─► etl_silver     (Stage 3: Parquet → clean Silver)
-          └─► (cluster chờ silver xong)
-                └─► etl_gold       (Stage 4: Silver + dim tables → BQ enriched)
-                      └─► delete_dataproc_cluster
-                            └─► ml_train_and_predict
-                                  ├─► export_crimes_geojson
-                                  └─► export_forecast_geojson
-                                        └─► end
+          └─► etl_bronze           (Stage 2: CSV → Parquet Bronze)
+                └─► etl_silver     (Stage 3: Parquet → clean Silver)
+                      └─► etl_gold (Stage 4: Silver + dim tables → BQ enriched)
+                            └─► delete_dataproc_cluster  (ALL_DONE)
+                                  └─► ml_train_and_predict
+                                        ├─► export_crimes_geojson
+                                        └─► export_forecast_geojson
+                                              └─► end
 """
 
 import sys
@@ -51,9 +46,9 @@ default_args = {
     "depends_on_past": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
-    "email_on_failure": True,
+    "email_on_failure": False,   # tắt cho đến khi cấu hình SMTP
     "email_on_retry": False,
-    "email": ["cdash-alerts@example.com"],   # <── đổi thành email thật
+    "email": ["cdash-alerts@example.com"],
 }
 
 # ── Dataproc Cluster Config ────────────────────────────────────────────────
@@ -85,10 +80,9 @@ def make_pyspark_job(script_name: str, args: list = None) -> dict:
         "pyspark_job": {
             "main_python_file_uri": f"gs://{GCS_BUCKET}/{GCS_SCRIPTS_PATH}/{script_name}",
             "python_file_uris": [
-                f"gs://{GCS_BUCKET}/{GCS_SCRIPTS_PATH}/utils.py"
+                f"gs://{GCS_BUCKET}/{GCS_SCRIPTS_PATH}/utils.zip"
             ],
             "properties": {
-                # spark-bigquery connector – dùng bởi Stage 4 Gold để ghi lên BQ
                 "spark.jars.packages": (
                     "com.google.cloud.spark:spark-bigquery-with-dependencies_2.12:0.32.2"
                 ),
@@ -103,13 +97,14 @@ def make_pyspark_job(script_name: str, args: list = None) -> dict:
 # ── Callables ──────────────────────────────────────────────────────────────
 
 def _ingest_chicago_crime(ds: str, full_load: bool = False, **kwargs):
-    """
-    Stage 1: Extract Chicago Crime từ BigQuery Public Data → GCS.
-    - full_load=True  : load từ 2001 đến hôm nay (chỉ chạy lần đầu)
-    - full_load=False : chỉ load ngày execution_date (chạy hàng tuần)
-    """
+    """Stage 1: Extract Chicago Crime từ BigQuery Public Data → GCS."""
     sys.path.insert(0, "/opt/airflow/scripts/etl/stage1_ingestion")
     from ingest_chicago_crime import airflow_ingest_crime
+
+    # Đọc full_load từ dag_run.conf nếu được trigger thủ công
+    dag_run = kwargs.get("dag_run")
+    if dag_run and dag_run.conf:
+        full_load = dag_run.conf.get("full_load", full_load)
 
     airflow_ingest_crime(
         project_id=GCP_PROJECT_ID,
@@ -120,50 +115,93 @@ def _ingest_chicago_crime(ds: str, full_load: bool = False, **kwargs):
 
 
 def _ingest_weather(ds: str, **kwargs):
-    """NOAA API → BQ dim_weather (giữ nguyên logic cũ)."""
+    """NOAA API → BQ dim_weather. Hỗ trợ full_load qua dag_run.conf."""
     import requests
     import pandas as pd
     from google.cloud import bigquery
+    from datetime import datetime, timedelta, date
 
-    headers = {"token": NOAA_API_TOKEN}
-    params  = {
-        "datasetid":  "GHCND",
-        "stationid":  NOAA_STATION_ID,
-        "startdate":  ds,
-        "enddate":    ds,
-        "datatypeid": "TMAX,TMIN,PRCP,AWND,SNWD",
-        "limit":      1000,
-        "units":      "standard",
-    }
-    resp = requests.get(
-        "https://www.ncdc.noaa.gov/cdo-web/api/v2/data",
-        headers=headers, params=params, timeout=30,
-    )
-    resp.raise_for_status()
-    results = resp.json().get("results", [])
-    if not results:
-        print(f"[ingest_weather] No NOAA data for {ds}.")
+    # Đọc full_load_weather từ dag_run.conf
+    dag_run = kwargs.get("dag_run")
+    full_load = False
+    if dag_run and dag_run.conf:
+        full_load = dag_run.conf.get("full_load_weather", False)
+
+    print(f"[ingest_weather] dag_run.conf = {dag_run.conf if dag_run else 'None'}")
+    print(f"[ingest_weather] full_load = {full_load}")
+
+    # Tính date range
+    if full_load:
+        start_date = date(2001, 1, 1)
+        end_date   = date.today() - timedelta(days=2)
+        print(f"[ingest_weather] FULL LOAD mode: {start_date} → {end_date}")
+    else:
+        # Incremental: lấy ngày ds - 2 vì NOAA trễ 1-2 ngày
+        target     = datetime.strptime(ds, "%Y-%m-%d").date() - timedelta(days=2)
+        start_date = target
+        end_date   = target
+        print(f"[ingest_weather] INCREMENTAL mode: {start_date}")
+
+    # NOAA giới hạn 1 năm/request → chia nhỏ theo năm
+    def date_chunks(start: date, end: date):
+        cur = start
+        while cur <= end:
+            chunk_end = min(date(cur.year, 12, 31), end)
+            yield cur, chunk_end
+            cur = date(cur.year + 1, 1, 1)
+
+    all_dfs = []
+    for chunk_start, chunk_end in date_chunks(start_date, end_date):
+        print(f"[ingest_weather] Pulling {chunk_start} → {chunk_end} ...")
+        headers = {"token": NOAA_API_TOKEN}
+        params  = {
+            "datasetid":  "GHCND",
+            "stationid":  NOAA_STATION_ID,
+            "startdate":  chunk_start.isoformat(),
+            "enddate":    chunk_end.isoformat(),
+            "datatypeid": "TMAX,TMIN,PRCP,AWND,SNWD",
+            "limit":      1000,
+            "units":      "standard",
+        }
+        resp = requests.get(
+            "https://www.ncdc.noaa.gov/cdo-web/api/v2/data",
+            headers=headers, params=params, timeout=30,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+
+        if not results:
+            print(f"[ingest_weather] No data for {chunk_start} → {chunk_end}, skipping.")
+            continue
+
+        df = pd.DataFrame(results)
+        df["date"] = pd.to_datetime(df["date"]).dt.date
+        df_pivot = (
+            df.pivot_table(index="date", columns="datatype", values="value", aggfunc="first")
+            .reset_index()
+            .rename(columns={
+                "date": "weather_date",
+                "TMAX": "temp_max",
+                "TMIN": "temp_min",
+                "PRCP": "precipitation",
+                "AWND": "wind_speed",
+                "SNWD": "snow_depth",
+            })
+        )
+        for col in ["temp_max", "temp_min", "precipitation", "wind_speed", "snow_depth"]:
+            if col not in df_pivot.columns:
+                df_pivot[col] = 0.0
+
+        all_dfs.append(df_pivot[[
+            "weather_date", "temp_max", "temp_min",
+            "precipitation", "wind_speed", "snow_depth",
+        ]])
+
+    if not all_dfs:
+        print("[ingest_weather] No data loaded. Skipping BQ write.")
         return
 
-    df = pd.DataFrame(results)
-    df["date"] = pd.to_datetime(df["date"]).dt.date
-    df_pivot = (
-        df.pivot_table(index="date", columns="datatype", values="value", aggfunc="first")
-        .reset_index()
-        .rename(columns={
-            "date": "weather_date",   # ← tên cột khớp với schema spec
-            "TMAX": "temp_max",
-            "TMIN": "temp_min",
-            "PRCP": "precipitation",
-            "AWND": "wind_speed",
-            "SNWD": "snow_depth",
-        })
-    )
-    for col in ["temp_max", "temp_min", "precipitation", "wind_speed", "snow_depth"]:
-        if col not in df_pivot.columns:
-            df_pivot[col] = 0.0
-
-    df_pivot = df_pivot[["weather_date", "temp_max", "temp_min", "precipitation", "wind_speed", "snow_depth"]]
+    df_final = pd.concat(all_dfs, ignore_index=True)
 
     client   = bigquery.Client(project=GCP_PROJECT_ID)
     table_id = f"{GCP_PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE_WEATHER}"
@@ -178,44 +216,182 @@ def _ingest_weather(ds: str, **kwargs):
             bigquery.SchemaField("snow_depth",     "FLOAT64"),
         ],
     )
-    client.load_table_from_dataframe(df_pivot, table_id, job_config=job_cfg).result()
-    print(f"[ingest_weather] Loaded {len(df_pivot)} rows for {ds}.")
+    client.load_table_from_dataframe(df_final, table_id, job_config=job_cfg).result()
+    print(f"[ingest_weather] Loaded {len(df_final)} rows ({start_date} → {end_date}).")
 
 
 def _ingest_socioeconomic(**kwargs):
-    """Chicago Data Portal → BQ dim_socioeconomic (giữ nguyên logic cũ)."""
+    """
+    US Census ACS API → aggregate lên community area → BQ dim_socioeconomic.
+    Thay thế Chicago Data Portal (hay bị 403).
+    """
+    import requests
     import pandas as pd
     from google.cloud import bigquery
 
-    url = "https://data.cityofchicago.org/api/views/kn9c-c2s2/rows.csv?accessType=DOWNLOAD"
-    df  = pd.read_csv(url).rename(columns={
-        "Community Area Number":       "community_area",
-        "COMMUNITY AREA NAME":         "area_name",
-        "PER CAPITA INCOME ":          "per_capita_income",
-        "PERCENT AGED 16+ UNEMPLOYED": "unemployment_rate",
-        "HARDSHIP INDEX":              "hardship_index",
-    })
-    df["population_density"] = None
-    df = df[["community_area", "area_name", "per_capita_income",
-             "unemployment_rate", "hardship_index", "population_density"]
-            ].dropna(subset=["community_area"])
-    df["community_area"] = df["community_area"].astype(int)
+    CENSUS_API_KEY = "2763ffff55c7e1e1f93de60ee214acfd706926d0"
+    HEADERS        = {"X-App-Token": "r9vE8urT836pTMTzEA1gn8xd0"}
+
+    VARS = [
+        "NAME",
+        "B01003_001E",   # total population
+        "B19013_001E",   # median household income
+        "B23025_002E",   # labor force
+        "B23025_005E",   # unemployed
+        "B15003_001E",   # pop 25+ (education denom)
+        "B15003_017E",   # HS diploma (dùng làm proxy hs_plus sau khi sum)
+        "B17001_001E",   # poverty denom
+        "B17001_002E",   # poverty count
+    ]
+
+    def fetch_acs(year: int) -> pd.DataFrame:
+        url = (
+            f"https://api.census.gov/data/{year}/acs/acs5"
+            f"?get={','.join(VARS)}"
+            f"&for=tract:*"
+            f"&in=state:17%20county:031"   # Illinois, Cook County
+            f"&key={CENSUS_API_KEY}"
+        )
+        resp = requests.get(url, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+        df = pd.DataFrame(data[1:], columns=data[0])
+        num_cols = [c for c in df.columns if c not in ("NAME", "state", "county", "tract")]
+        for c in num_cols:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+        df["tract"]   = df["tract"].str.zfill(6)
+        df["GEOID10"] = "17031" + df["tract"]
+        return df
+
+    # Lấy năm ACS gần nhất
+    raw_acs = fetch_acs(2023)
+    print(f"[ingest_socioeconomic] ACS 2023: {len(raw_acs)} tracts")
+
+    # Crosswalk tract → community area (Chicago Data Portal, endpoint JSON ổn định hơn CSV)
+    xwalk_resp = requests.get(
+        "https://data.cityofchicago.org/api/v3/views/74p9-q2aq/query.json",
+        headers=HEADERS, timeout=30,
+    )
+    xwalk_resp.raise_for_status()
+    xwalk = pd.DataFrame(xwalk_resp.json())
+    xwalk.columns = xwalk.columns.str.upper()
+    xwalk = xwalk[["GEOID10", "COMMAREA"]].copy()
+    xwalk["GEOID10"]  = xwalk["GEOID10"].astype(str).str.strip()
+    xwalk["COMMAREA"] = pd.to_numeric(xwalk["COMMAREA"], errors="coerce")
+    xwalk = xwalk.dropna(subset=["COMMAREA"])
+
+    n_ca = xwalk["COMMAREA"].nunique()
+    if n_ca != 77:
+        print(f"[ingest_socioeconomic] WARNING: crosswalk có {n_ca} community areas, kỳ vọng 77")
+    else:
+        print("[ingest_socioeconomic] Crosswalk: ✅ đủ 77 community areas")
+
+    # JOIN tract → community area
+    raw_acs = raw_acs.merge(xwalk, on="GEOID10", how="left")
+    raw_acs = raw_acs.dropna(subset=["COMMAREA"])
+    raw_acs["COMMAREA"] = raw_acs["COMMAREA"].astype(int)
+    print(f"[ingest_socioeconomic] Sau lọc Chicago: {len(raw_acs)} tracts")
+
+    # Aggregate lên community area
+    agg = raw_acs.groupby("COMMAREA").agg(
+        population    = ("B01003_001E", "sum"),
+        income_sum    = ("B19013_001E", "sum"),
+        labor_force   = ("B23025_002E", "sum"),
+        unemployed    = ("B23025_005E", "sum"),
+        poverty_denom = ("B17001_001E", "sum"),
+        poverty_count = ("B17001_002E", "sum"),
+    ).reset_index()
+
+    agg["unemployment_rate"] = (agg["unemployed"] / agg["labor_force"] * 100).round(2)
+    agg["per_capita_income"] = (agg["income_sum"] / agg["population"]).round(0)
+    agg["poverty_rate"]      = (agg["poverty_count"] / agg["poverty_denom"] * 100).round(2)
+    # hardship_index: dùng poverty_rate làm proxy (không có sẵn từ ACS trực tiếp)
+    agg["hardship_index"]    = agg["poverty_rate"].round(0).astype("Int64")
+
+    df_final = agg.rename(columns={
+        "COMMAREA":   "community_area",
+        "population": "population_density",
+    })[[
+        "community_area", "per_capita_income",
+        "unemployment_rate", "hardship_index", "population_density",
+    ]]
+    # community_area_name: để trống vì không có trong ACS (tĩnh, có thể bổ sung sau)
+    df_final["community_area_name"] = ""
+    df_final = df_final[[
+        "community_area", "community_area_name",
+        "per_capita_income", "unemployment_rate",
+        "hardship_index", "population_density",
+    ]]
 
     client   = bigquery.Client(project=GCP_PROJECT_ID)
     table_id = f"{GCP_PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE_SOCIOECONOMIC}"
     job_cfg  = bigquery.LoadJobConfig(
         write_disposition="WRITE_TRUNCATE",
         schema=[
-            bigquery.SchemaField("community_area",    "INTEGER"),
-            bigquery.SchemaField("area_name",         "STRING"),
-            bigquery.SchemaField("per_capita_income", "FLOAT64"),
-            bigquery.SchemaField("unemployment_rate", "FLOAT64"),
-            bigquery.SchemaField("hardship_index",    "INTEGER"),
-            bigquery.SchemaField("population_density","FLOAT64"),
+            bigquery.SchemaField("community_area",      "INTEGER"),
+            bigquery.SchemaField("community_area_name", "STRING"),
+            bigquery.SchemaField("per_capita_income",   "FLOAT64"),
+            bigquery.SchemaField("unemployment_rate",   "FLOAT64"),
+            bigquery.SchemaField("hardship_index",      "INTEGER"),
+            bigquery.SchemaField("population_density",  "FLOAT64"),
         ],
     )
-    client.load_table_from_dataframe(df, table_id, job_config=job_cfg).result()
-    print(f"[ingest_socioeconomic] Loaded {len(df)} community areas.")
+    client.load_table_from_dataframe(df_final, table_id, job_config=job_cfg).result()
+    print(f"[ingest_socioeconomic] Loaded {len(df_final)} community areas.")
+
+
+def _ingest_poi(**kwargs):
+    """
+    OpenStreetMap (qua osmnx) → CSV → GCS.
+    Stage 4 Gold đọc file này để tính dist_nearest_*.
+    Chạy hàng tuần nhưng data POI thay đổi chậm nên ổn.
+    """
+    import pandas as pd
+    from google.cloud import storage
+
+    try:
+        import osmnx as ox
+    except ImportError:
+        print("[ingest_poi] osmnx chưa được cài. Thêm vào _PIP_ADDITIONAL_REQUIREMENTS rồi restart.")
+        raise
+
+    poi_configs = {
+        "transit_station": {"railway": "station"},
+        "school":          {"amenity": "school"},
+        "park":            {"leisure": "park"},
+        "nightlife":       {"amenity": ["bar", "nightclub"]},
+    }
+
+    all_pois = []
+    for poi_type, tags in poi_configs.items():
+        print(f"[ingest_poi] Fetching {poi_type} ...")
+        try:
+            gdf = ox.features_from_place("Chicago, Illinois, USA", tags)
+            if not gdf.empty:
+                gdf["longitude"] = gdf.geometry.centroid.x
+                gdf["latitude"]  = gdf.geometry.centroid.y
+                gdf["poi_type"]  = poi_type
+                all_pois.append(
+                    pd.DataFrame(gdf[["latitude", "longitude", "poi_type"]])
+                    .dropna()
+                    .reset_index(drop=True)
+                )
+                print(f"[ingest_poi]   ✓ {len(gdf)} {poi_type}")
+        except Exception as e:
+            print(f"[ingest_poi]   ✗ {poi_type} failed: {e}")
+
+    if not all_pois:
+        raise RuntimeError("[ingest_poi] Không lấy được POI nào từ OpenStreetMap.")
+
+    df = pd.concat(all_pois, ignore_index=True)
+    df = df.drop_duplicates(subset=["latitude", "longitude", "poi_type"])
+
+    # Upload lên GCS để Stage 4 Gold đọc
+    gcs    = storage.Client(project=GCP_PROJECT_ID)
+    bucket = gcs.bucket(GCS_BUCKET)
+    blob   = bucket.blob("raw/poi/chicago_pois.csv")
+    blob.upload_from_string(df.to_csv(index=False), content_type="text/csv")
+    print(f"[ingest_poi] Uploaded {len(df)} POIs → gs://{GCS_BUCKET}/raw/poi/chicago_pois.csv")
 
 
 def _run_ml_pipeline(project_id, dataset, enriched_table, predictions_table, **kwargs):
@@ -259,7 +435,7 @@ with DAG(
 ) as dag:
 
     start = EmptyOperator(task_id="start")
-    end   = EmptyOperator(task_id="end")
+    end   = EmptyOperator(task_id="end", trigger_rule=TriggerRule.ALL_DONE)
 
     # ── Stage 1: Ingest Chicago Crime (BQ Public → GCS) ───────────────────
     ingest_crime = PythonOperator(
@@ -275,13 +451,19 @@ with DAG(
         op_kwargs={"ds": "{{ ds }}"},
     )
 
-    # ── Stage 1: Ingest Socioeconomic (Chicago Portal → BQ) ──────────────
+    # ── Stage 1: Ingest Socioeconomic (Census ACS → BQ) ──────────────────
     ingest_socioeconomic = PythonOperator(
         task_id="ingest_socioeconomic",
         python_callable=_ingest_socioeconomic,
     )
 
-    # ── Tạo Dataproc cluster (song song với 3 ingest tasks) ───────────────
+    # ── Stage 1: Ingest POI (OpenStreetMap → GCS) ─────────────────────────
+    ingest_poi = PythonOperator(
+        task_id="ingest_poi",
+        python_callable=_ingest_poi,
+    )
+
+    # ── Tạo Dataproc cluster (song song với ingest tasks) ─────────────────
     create_cluster = DataprocCreateClusterOperator(
         task_id="create_dataproc_cluster",
         project_id=GCP_PROJECT_ID,
@@ -289,6 +471,7 @@ with DAG(
         region=GCP_REGION,
         cluster_name=DATAPROC_CLUSTER_NAME,
         gcp_conn_id=GCP_CONN_ID,
+        use_if_exists=True,
     )
 
     # ── Stage 2: Bronze – CSV trên GCS → Parquet ─────────────────────────
@@ -298,7 +481,7 @@ with DAG(
             "stage2_bronze/data_ingestion.py",
             args=[
                 "--env=prod",
-                f"--raw_path=gs://{GCS_BUCKET}/raw/chicago_crime",
+                f"--raw_path=gs://{GCS_BUCKET}/raw/chicago_crime/*/*/*/data.csv",
                 f"--bronze_path=gs://{GCS_BUCKET}/bronze/chicago_crime",
             ],
         ),
@@ -320,7 +503,7 @@ with DAG(
     )
 
     # ── Stage 4: Gold – feature engineering + ghi lên BQ ─────────────────
-    # Chờ Silver XONG và cả weather/socioeconomic đã có trong BQ
+    # ALL_DONE: chạy kể cả khi weather/socio failed (COALESCE về 0 trong SQL)
     etl_gold = DataprocSubmitJobOperator(
         task_id="etl_gold",
         job=make_pyspark_job(
@@ -335,9 +518,10 @@ with DAG(
         region=GCP_REGION,
         project_id=GCP_PROJECT_ID,
         gcp_conn_id=GCP_CONN_ID,
+        trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    # ── Xóa cluster sau Gold (kể cả khi lỗi) ─────────────────────────────
+    # ── Xóa cluster – chờ bronze + silver + gold đều xong ────────────────
     delete_cluster = DataprocDeleteClusterOperator(
         task_id="delete_dataproc_cluster",
         project_id=GCP_PROJECT_ID,
@@ -357,37 +541,59 @@ with DAG(
             "enriched_table":    BQ_TABLE_ENRICHED,
             "predictions_table": BQ_TABLE_PREDICTIONS,
         },
+        trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     # ── Stage 6: Export GeoJSON ───────────────────────────────────────────
-    export_crimes   = PythonOperator(task_id="export_crimes_geojson",   python_callable=_export_crimes)
-    export_forecast = PythonOperator(task_id="export_forecast_geojson", python_callable=_export_forecast)
+    export_crimes = PythonOperator(
+        task_id="export_crimes_geojson",
+        python_callable=_export_crimes,
+    )
+    export_forecast = PythonOperator(
+        task_id="export_forecast_geojson",
+        python_callable=_export_forecast,
+    )
 
     # ── Dependencies ──────────────────────────────────────────────────────
     #
-    #  start ──► ingest_crime ─────────────────────────────────────────────────┐
-    #        ├─► ingest_weather ──────────────────────────────────────────────┐ │
-    #        ├─► ingest_socioeconomic ─────────────────────────────────────── │─┤
-    #        └─► create_cluster ──► etl_bronze ──► etl_silver ──► etl_gold ──┘ │
-    #                                                                  │        │
-    #                                             (tất cả 4 xong)     └────────┘
-    #                                                  ↓
-    #                                          delete_cluster
-    #                                                  ↓
-    #                                           ml_train_and_predict
-    #                                            /                  \
-    #                               export_crimes            export_forecast
-    #                                            \                  /
-    #                                                    end
+    #  start ──► ingest_crime ──────────────────────────────────────────────┐
+    #        ├─► ingest_weather ───────────────────────────────────────────┐│
+    #        ├─► ingest_socioeconomic ──────────────────────────────────── ││
+    #        ├─► ingest_poi ──────────────────────────────────────────────┐ ││
+    #        └─► create_cluster                                           │ ││
+    #                 └─► etl_bronze ◄── ingest_crime ───────────────────┘ ││
+    #                       └─► etl_silver                                  ││
+    #                             └─► etl_gold ◄── ingest_weather ─────────┘│
+    #                                       ◄── ingest_socioeconomic ────────┘
+    #                                       ◄── ingest_poi
+    #                  ┌────────────────────┴──────────────┐
+    #              etl_bronze                          etl_silver
+    #                  └────────────────────┬──────────────┘
+    #                              delete_cluster (ALL_DONE)
+    #                                       │
+    #                              ml_train_and_predict
+    #                               /                 \
+    #                    export_crimes         export_forecast
+    #                               \                 /
+    #                                      end
 
-    start >> [ingest_crime, ingest_weather, ingest_socioeconomic, create_cluster]
+    # Stage 1 + create cluster chạy song song
+    start >> [ingest_crime, ingest_weather, ingest_socioeconomic, ingest_poi, create_cluster]
 
-    # Bronze chờ: cluster sẵn sàng VÀ crime data đã lên GCS
+    # Bronze chờ cluster sẵn sàng VÀ crime data đã lên GCS
     [create_cluster, ingest_crime] >> etl_bronze
 
+    # Silver chờ Bronze
     etl_bronze >> etl_silver
 
-    # Gold chờ: Silver xong VÀ weather/socio đã có trong BQ
-    [etl_silver, ingest_weather, ingest_socioeconomic] >> etl_gold
+    # Gold chờ Silver + weather + socio + poi (ALL_DONE nên không bị block nếu 1 cái failed)
+    [etl_silver, ingest_weather, ingest_socioeconomic, ingest_poi] >> etl_gold
 
-    etl_gold >> delete_cluster >> ml_train >> [export_crimes, export_forecast] >> end
+    # delete_cluster chờ CẢ BA task Dataproc xong để tránh xóa khi đang retry
+    [etl_bronze, etl_silver, etl_gold] >> delete_cluster
+
+    # ML chỉ chạy khi ETL thành công
+    delete_cluster >> ml_train
+
+    # Export và kết thúc
+    ml_train >> [export_crimes, export_forecast] >> end

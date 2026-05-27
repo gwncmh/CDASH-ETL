@@ -1,6 +1,7 @@
 import argparse
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_timestamp, year, month, dayofmonth, current_timestamp
+from pyspark.sql.functions import coalesce
 
 MANDATORY_COLUMNS = [
     "unique_key", 
@@ -34,8 +35,11 @@ def partition_writer(df, bronze_path: str):
     
     # 1. Parse Date (Sử dụng đúng định dạng của dữ liệu Chicago Crime)
     df_parsed = df.withColumn(
-        "parsed_date", 
-        to_timestamp(col("date"), "MM/dd/yyyy hh:mm:ss a")
+    "parsed_date",
+    coalesce(
+        to_timestamp(col("date"), "yyyy-MM-dd'T'HH:mm:ss"),  # BigQuery format
+        to_timestamp(col("date"), "MM/dd/yyyy hh:mm:ss a"),  # Chicago Portal format
+        )
     )
     
     # 2. Bổ sung cột Partition
@@ -76,9 +80,9 @@ if __name__ == "__main__":
     try:
         print(f"Đang nạp dữ liệu thô từ: {args.raw_path}")
         df_raw = spark.read \
-            .option("header", "true") \
-            .option("inferSchema", "true") \
-            .csv(args.raw_path)
+        .option("header", "true") \
+        .option("inferSchema", "true") \
+        .csv(f"{args.raw_path}")
         
         # Chạy logic xử lý
         raw_validator(df_raw)

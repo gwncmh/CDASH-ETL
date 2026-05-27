@@ -1,0 +1,27 @@
+[2026-05-27T10:40:25.565+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-27T10:28:23.691752+00:00 [queued]>
+[2026-05-27T10:40:25.576+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-27T10:28:23.691752+00:00 [queued]>
+[2026-05-27T10:40:25.576+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2026-05-27T10:40:25.589+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-27 10:28:23.691752+00:00
+[2026-05-27T10:40:25.599+0000] {standard_task_runner.py:60} INFO - Started process 729 to run task
+[2026-05-27T10:40:25.603+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-05-27T10:28:23.691752+00:00', '--job-id', '145', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmprc2rfde0']
+[2026-05-27T10:40:25.607+0000] {standard_task_runner.py:88} INFO - Job 145: Subtask ml_train_and_predict
+[2026-05-27T10:40:25.669+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-27T10:28:23.691752+00:00 [running]> on host 93e8dbfc6168
+[2026-05-27T10:40:25.762+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-27T10:28:23.691752+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-27T10:28:23.691752+00:00'
+[2026-05-27T10:40:25.766+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/dag_crime_pipeline.py", line 249, in _run_ml_pipeline
+    from ml_pipeline import train_and_predict
+ModuleNotFoundError: No module named 'ml_pipeline'
+[2026-05-27T10:40:25.786+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260527T102823, start_date=20260527T104025, end_date=20260527T104025
+[2026-05-27T10:40:25.799+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 145 for task ml_train_and_predict (No module named 'ml_pipeline'; 729)
+[2026-05-27T10:40:25.816+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-05-27T10:40:25.841+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

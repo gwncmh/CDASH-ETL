@@ -1,0 +1,33 @@
+[2026-05-24T19:17:30.705+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-05-24T19:12:20.177928+00:00 [queued]>
+[2026-05-24T19:17:30.715+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-05-24T19:12:20.177928+00:00 [queued]>
+[2026-05-24T19:17:30.716+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2026-05-24T19:17:30.732+0000] {taskinstance.py:2191} INFO - Executing <Task(DataprocCreateClusterOperator): create_dataproc_cluster> on 2026-05-24 19:12:20.177928+00:00
+[2026-05-24T19:17:30.741+0000] {standard_task_runner.py:60} INFO - Started process 392 to run task
+[2026-05-24T19:17:30.746+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'create_dataproc_cluster', 'manual__2026-05-24T19:12:20.177928+00:00', '--job-id', '15', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp2rznkcb9']
+[2026-05-24T19:17:30.749+0000] {standard_task_runner.py:88} INFO - Job 15: Subtask create_dataproc_cluster
+[2026-05-24T19:17:30.820+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-05-24T19:12:20.177928+00:00 [running]> on host 93e8dbfc6168
+[2026-05-24T19:17:30.927+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='create_dataproc_cluster' AIRFLOW_CTX_EXECUTION_DATE='2026-05-24T19:12:20.177928+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-24T19:12:20.177928+00:00'
+[2026-05-24T19:17:30.928+0000] {dataproc.py:722} INFO - Creating cluster: crime-etl-cluster
+[2026-05-24T19:17:30.954+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 723, in execute
+    hook = DataprocHook(gcp_conn_id=self.gcp_conn_id, impersonation_chain=self.impersonation_chain)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 210, in __init__
+    super().__init__(gcp_conn_id=gcp_conn_id, impersonation_chain=impersonation_chain)
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 242, in __init__
+    self.extras: dict = self.get_connection(self.gcp_conn_id).extra_dejson
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/hooks/base.py", line 82, in get_connection
+    conn = Connection.get_connection_from_secrets(conn_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/connection.py", line 479, in get_connection_from_secrets
+    raise AirflowNotFoundException(f"The conn_id `{conn_id}` isn't defined")
+airflow.exceptions.AirflowNotFoundException: The conn_id `google_cloud_default` isn't defined
+[2026-05-24T19:17:30.960+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=create_dataproc_cluster, execution_date=20260524T191220, start_date=20260524T191730, end_date=20260524T191730
+[2026-05-24T19:17:30.972+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 15 for task create_dataproc_cluster (The conn_id `google_cloud_default` isn't defined; 392)
+[2026-05-24T19:17:31.000+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-05-24T19:17:31.031+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

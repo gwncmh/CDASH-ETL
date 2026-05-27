@@ -22,6 +22,8 @@ x-airflow-common: &airflow-common
       h3==3.7.7
       pandas==2.1.4
       google-cloud-bigquery[pandas]==3.17.2
+      osmnx==1.9.1
+      geopandas==0.14.3
   volumes:
     - ./dags:/opt/airflow/dags
     - ./scripts:/opt/airflow/scripts

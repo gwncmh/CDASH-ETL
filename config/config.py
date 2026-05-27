@@ -22,9 +22,12 @@ BQ_TABLE_PREDICTIONS    = "prediction_results"    # Bảng chứa kết quả d�
 
 # Dataproc cluster config (ĐÃ ĐƯỢC CHỈNH SỬA ĐỂ TIẾT KIỆM TIỀN CHO SINH VIÊN)
 DATAPROC_CLUSTER_NAME   = "crime-etl-cluster"
-DATAPROC_NUM_WORKERS    = 0                       # Quan trọng: Đổi về 0 để chạy Single Node (Tiết kiệm 66% tiền)
+DATAPROC_NUM_WORKERS    = 2                      # Quan trọng: Đổi về 0 để chạy Single Node (Tiết kiệm 66% tiền)
 DATAPROC_MASTER_TYPE    = "e2-standard-2"         # Dùng dòng máy e2 rẻ hơn n1, vẫn dư sức chạy Big Data
 DATAPROC_WORKER_TYPE    = "e2-standard-2"         # Thực tế dòng này sẽ bị bỏ qua vì số worker = 0
 
 # Airflow connection id 
 GCP_CONN_ID             = "google_cloud_default"
+# NOAA Weather API
+NOAA_API_TOKEN  = "ystxZEXaKsDWcEwfgFOIZFVpIASQCHNy"   # token từ pull_weather.py
+NOAA_STATION_ID = "GHCND:USW00094846"                   # station Chicago
