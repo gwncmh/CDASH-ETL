@@ -73,14 +73,24 @@ CLUSTER_CONFIG = {
 }
 
 # ── PySpark job helper ─────────────────────────────────────────────────────
-def make_pyspark_job(script_name: str, args: list = None) -> dict:
+def make_pyspark_job(stage_name: str, args: list = None) -> dict:
+    """
+    stage_name: ví dụ "stage3_silver"
+    GCS layout:
+      scripts/stage3_silver_main.py   ← entry point (.py thô)
+      scripts/stage3_silver.zip       ← chứa src/
+      scripts/utils.zip
+    """
+    base = f"gs://{GCS_BUCKET}/{GCS_SCRIPTS_PATH}"
+
     job = {
         "reference": {"project_id": GCP_PROJECT_ID},
         "placement": {"cluster_name": DATAPROC_CLUSTER_NAME},
         "pyspark_job": {
-            "main_python_file_uri": f"gs://{GCS_BUCKET}/{GCS_SCRIPTS_PATH}/{script_name}",
+            "main_python_file_uri": f"{base}/{stage_name}_main.py",
             "python_file_uris": [
-                f"gs://{GCS_BUCKET}/{GCS_SCRIPTS_PATH}/utils.zip"
+                f"{base}/utils.zip",
+                f"{base}/{stage_name}.zip",
             ],
             "properties": {
                 "spark.jars.packages": (
@@ -92,7 +102,6 @@ def make_pyspark_job(script_name: str, args: list = None) -> dict:
     if args:
         job["pyspark_job"]["args"] = args
     return job
-
 
 # ── Callables ──────────────────────────────────────────────────────────────
 
@@ -395,13 +404,34 @@ def _ingest_poi(**kwargs):
 
 
 def _run_ml_pipeline(project_id, dataset, enriched_table, predictions_table, **kwargs):
-    from ml_pipeline import train_and_predict
-    train_and_predict(
+    from ml.ml_pipeline import train_and_predict
+
+    result = train_and_predict(
         project_id=project_id,
         dataset=dataset,
         enriched_table=enriched_table,
         predictions_table=predictions_table,
+        lookback_days=400,          # tường minh
+        write_mode="WRITE_TRUNCATE",
     )
+
+    # Push metrics lên XCom để monitor trên Airflow UI
+    ti = kwargs.get("ti")
+    if ti:
+        ti.xcom_push(key="val_auc",       value=result["val_auc"])
+        ti.xcom_push(key="test_auc",      value=result["test_auc"])
+        ti.xcom_push(key="val_f1",        value=result["val_f1"])
+        ti.xcom_push(key="test_f1",       value=result["test_f1"])
+        ti.xcom_push(key="model_version", value=result["model_version"])
+
+    # Cảnh báo nếu model kém
+    if result["val_auc"] < 0.75 or result["val_f1"] < 0.6:
+        import logging
+        logging.warning(
+            "[ML] ⚠️ Model chưa đạt ngưỡng: val_auc=%.4f val_f1=%.4f",
+            result["val_auc"], result["val_f1"],
+        )
+    return result
 
 
 def _export_crimes(**kwargs):
@@ -495,7 +525,7 @@ with DAG(
     etl_silver = DataprocSubmitJobOperator(
         task_id="etl_silver",
         job=make_pyspark_job(
-            "stage3_silver/main.py",
+            "stage3_silver",
             args=[f"--project={GCP_PROJECT_ID}"],
         ),
         region=GCP_REGION,
@@ -508,7 +538,7 @@ with DAG(
     etl_gold = DataprocSubmitJobOperator(
         task_id="etl_gold",
         job=make_pyspark_job(
-            "stage4_gold/main.py",
+            "stage4_gold",
             args=[
                 "--mode=append",
                 f"--project={GCP_PROJECT_ID}",

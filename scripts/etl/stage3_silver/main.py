@@ -5,14 +5,24 @@ import shutil
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
+print("=== sys.path ===")
+for p in sys.path:
+    print(p)
+print("================")
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
+# Add zip vào sys.path ngay lập tức
+_zip = os.path.join(os.getcwd(), "stage3_silver.zip")
+if _zip not in sys.path:
+    sys.path.insert(0, _zip)
+
 from utils.logger import get_logger
-from stage3_silver.src import normalize_schema, clean_data, encode_spatial_features
-from stage3_silver.src.deduplicator import remove_existing_records
+from src import normalize_schema, clean_data, encode_spatial_features
+from src.deduplicator import remove_existing_records
 
 logger = get_logger("Stage3_SubmitJob")
 
@@ -21,7 +31,7 @@ logger = get_logger("Stage3_SubmitJob")
 # True: Xóa sạch dữ liệu Silver cũ mỗi lần chạy để test lại từ đầu
 # False: Chạy thật (Chỉ nạp thêm những dòng chưa từng có)
 # ===================================================================
-DEV_MODE = True 
+DEV_MODE = False 
 
 def main():
     logger.info("=== BẮT ĐẦU STAGE 3: SILVER LAYER ===")

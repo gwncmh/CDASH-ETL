@@ -18,12 +18,17 @@ import yaml
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import col, to_date, broadcast
 
+# Add zip vào sys.path ngay lập tức
+_zip = os.path.join(os.getcwd(), "stage4_gold.zip")
+if _zip not in sys.path:
+    sys.path.insert(0, _zip)
+
 current_dir  = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from stage4_gold.src import (
+from src import (
     calculate_rolling_features,
     process_weather_data,
     clean_socio_data,

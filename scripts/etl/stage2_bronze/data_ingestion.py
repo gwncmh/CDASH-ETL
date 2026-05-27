@@ -1,8 +1,10 @@
 import argparse
+import sys
 from datetime import datetime, timedelta
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_timestamp, year, month, dayofmonth, current_timestamp
 from pyspark.sql.functions import coalesce
+from google.cloud import storage
 
 MANDATORY_COLUMNS = [
     "unique_key", 
@@ -59,6 +61,11 @@ def partition_writer(df, bronze_path: str):
         
     print("Partition Writer: Ghi dữ liệu Bronze thành công!")
 
+def file_exists_on_gcs(bucket_name, blob_path):
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    return bucket.blob(blob_path).exists()
+
 # ====================================================================
 # ĐIỂM CHẠY CHÍNH (ENTRYPOINT)
 # ====================================================================
@@ -85,6 +92,12 @@ if __name__ == "__main__":
     else:
         raw_path = args.raw_path
         print("FULL LOAD mode")
+
+    # Trước dòng df_raw = spark.read...
+    marker_path = f"raw/chicago_crime/{d.year}/{d.month:02d}/{d.day:02d}/_SUCCESS"
+    if not file_exists_on_gcs("chicago-crime-raw-group15", marker_path):
+        print(f"No _SUCCESS marker for {args.ds}, skipping Bronze stage.")
+        sys.exit(0)
 
     df_raw = spark.read.option("header", "true") \
                        .option("inferSchema", "true") \

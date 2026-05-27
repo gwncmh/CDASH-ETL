@@ -1,0 +1,133 @@
+[2026-05-27T16:32:37.953+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_silver manual__2026-05-27T16:16:57.988338+00:00 [queued]>
+[2026-05-27T16:32:37.960+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_silver manual__2026-05-27T16:16:57.988338+00:00 [queued]>
+[2026-05-27T16:32:37.961+0000] {taskinstance.py:2170} INFO - Starting attempt 2 of 2
+[2026-05-27T16:32:37.974+0000] {taskinstance.py:2191} INFO - Executing <Task(DataprocSubmitJobOperator): etl_silver> on 2026-05-27 16:16:57.988338+00:00
+[2026-05-27T16:32:37.982+0000] {standard_task_runner.py:60} INFO - Started process 1404 to run task
+[2026-05-27T16:32:37.985+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'etl_silver', 'manual__2026-05-27T16:16:57.988338+00:00', '--job-id', '184', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp3hwjpviv']
+[2026-05-27T16:32:37.990+0000] {standard_task_runner.py:88} INFO - Job 184: Subtask etl_silver
+[2026-05-27T16:32:38.062+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.etl_silver manual__2026-05-27T16:16:57.988338+00:00 [running]> on host db8b8170dea9
+[2026-05-27T16:32:38.188+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='etl_silver' AIRFLOW_CTX_EXECUTION_DATE='2026-05-27T16:16:57.988338+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-27T16:16:57.988338+00:00'
+[2026-05-27T16:32:38.191+0000] {dataproc.py:2208} INFO - Submitting job
+[2026-05-27T16:32:38.205+0000] {connection.py:234} WARNING - Connection schemes (type: google_cloud_platform) shall not contain '_' according to RFC3986.
+[2026-05-27T16:32:38.207+0000] {base.py:83} INFO - Using connection ID 'google_cloud_default' for task execution.
+[2026-05-27T16:32:39.889+0000] {dataproc.py:2220} INFO - Job 875dbd98-6d81-4955-9f80-bba50e05fc81 submitted successfully.
+[2026-05-27T16:32:39.920+0000] {dataproc.py:2254} INFO - Waiting for job 875dbd98-6d81-4955-9f80-bba50e05fc81 to complete
+[2026-05-27T16:33:02.498+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 2255, in execute
+    self.hook.wait_for_job(
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 477, in inner_wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 724, in wait_for_job
+    raise AirflowException(f"Job failed:\n{job}")
+airflow.exceptions.AirflowException: Job failed:
+reference {
+  project_id: "sage-mind-489618-n5"
+  job_id: "875dbd98-6d81-4955-9f80-bba50e05fc81"
+}
+placement {
+  cluster_name: "crime-etl-cluster"
+  cluster_uuid: "e04c0de6-dd42-420b-8376-1ac805deebc4"
+}
+pyspark_job {
+  main_python_file_uri: "gs://chicago-crime-raw-group15/scripts/stage3_silver/main.py"
+  args: "--project=sage-mind-489618-n5"
+  python_file_uris: "gs://chicago-crime-raw-group15/scripts/utils.zip"
+  properties {
+    key: "spark.jars.packages"
+    value: "com.google.cloud.spark:spark-bigquery-with-dependencies_2.12:0.32.2"
+  }
+}
+status {
+  state: ERROR
+  details: "Job failed with message [ModuleNotFoundError: No module named \'utils\']. Additional details can be found at:\nhttps://console.cloud.google.com/dataproc/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81?project=sage-mind-489618-n5&region=us-central1\ngcloud dataproc jobs wait \'875dbd98-6d81-4955-9f80-bba50e05fc81\' --region \'us-central1\' --project \'sage-mind-489618-n5\'\nhttps://console.cloud.google.com/storage/browser/dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/e04c0de6-dd42-420b-8376-1ac805deebc4/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81/\ngs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/e04c0de6-dd42-420b-8376-1ac805deebc4/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81/driveroutput.*"
+  state_start_time {
+    seconds: 1779899573
+    nanos: 23456000
+  }
+}
+status_history {
+  state: PENDING
+  state_start_time {
+    seconds: 1779899559
+    nanos: 280798000
+  }
+}
+status_history {
+  state: SETUP_DONE
+  state_start_time {
+    seconds: 1779899559
+    nanos: 342563000
+  }
+}
+status_history {
+  state: RUNNING
+  state_start_time {
+    seconds: 1779899559
+    nanos: 803352000
+  }
+}
+driver_output_resource_uri: "gs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/e04c0de6-dd42-420b-8376-1ac805deebc4/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81/driveroutput"
+driver_control_files_uri: "gs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/e04c0de6-dd42-420b-8376-1ac805deebc4/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81/"
+job_uuid: "875dbd98-6d81-4955-9f80-bba50e05fc81"
+done: true
+
+[2026-05-27T16:33:02.505+0000] {taskinstance.py:1138} INFO - Marking task as FAILED. dag_id=crime_analytics_pipeline, task_id=etl_silver, execution_date=20260527T161657, start_date=20260527T163237, end_date=20260527T163302
+[2026-05-27T16:33:02.540+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 184 for task etl_silver (Job failed:
+reference {
+  project_id: "sage-mind-489618-n5"
+  job_id: "875dbd98-6d81-4955-9f80-bba50e05fc81"
+}
+placement {
+  cluster_name: "crime-etl-cluster"
+  cluster_uuid: "e04c0de6-dd42-420b-8376-1ac805deebc4"
+}
+pyspark_job {
+  main_python_file_uri: "gs://chicago-crime-raw-group15/scripts/stage3_silver/main.py"
+  args: "--project=sage-mind-489618-n5"
+  python_file_uris: "gs://chicago-crime-raw-group15/scripts/utils.zip"
+  properties {
+    key: "spark.jars.packages"
+    value: "com.google.cloud.spark:spark-bigquery-with-dependencies_2.12:0.32.2"
+  }
+}
+status {
+  state: ERROR
+  details: "Job failed with message [ModuleNotFoundError: No module named \'utils\']. Additional details can be found at:\nhttps://console.cloud.google.com/dataproc/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81?project=sage-mind-489618-n5&region=us-central1\ngcloud dataproc jobs wait \'875dbd98-6d81-4955-9f80-bba50e05fc81\' --region \'us-central1\' --project \'sage-mind-489618-n5\'\nhttps://console.cloud.google.com/storage/browser/dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/e04c0de6-dd42-420b-8376-1ac805deebc4/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81/\ngs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/e04c0de6-dd42-420b-8376-1ac805deebc4/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81/driveroutput.*"
+  state_start_time {
+    seconds: 1779899573
+    nanos: 23456000
+  }
+}
+status_history {
+  state: PENDING
+  state_start_time {
+    seconds: 1779899559
+    nanos: 280798000
+  }
+}
+status_history {
+  state: SETUP_DONE
+  state_start_time {
+    seconds: 1779899559
+    nanos: 342563000
+  }
+}
+status_history {
+  state: RUNNING
+  state_start_time {
+    seconds: 1779899559
+    nanos: 803352000
+  }
+}
+driver_output_resource_uri: "gs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/e04c0de6-dd42-420b-8376-1ac805deebc4/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81/driveroutput"
+driver_control_files_uri: "gs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/e04c0de6-dd42-420b-8376-1ac805deebc4/jobs/875dbd98-6d81-4955-9f80-bba50e05fc81/"
+job_uuid: "875dbd98-6d81-4955-9f80-bba50e05fc81"
+done: true
+; 1404)
+[2026-05-27T16:33:02.566+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-05-27T16:33:02.603+0000] {taskinstance.py:3280} INFO - 1 downstream tasks scheduled from follow-on schedule check
