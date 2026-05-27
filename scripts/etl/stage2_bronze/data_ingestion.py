@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime, timedelta
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_timestamp, year, month, dayofmonth, current_timestamp
 from pyspark.sql.functions import coalesce
@@ -62,35 +63,31 @@ def partition_writer(df, bronze_path: str):
 # ĐIỂM CHẠY CHÍNH (ENTRYPOINT)
 # ====================================================================
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Bronze Stage Ingestion")
-    parser.add_argument("--env", type=str, default="local", help="Môi trường chạy: local hoặc prod")
-    parser.add_argument("--raw_path", type=str, required=True, help="Đường dẫn file CSV gốc")
-    parser.add_argument("--bronze_path", type=str, required=True, help="Đường dẫn thư mục ghi Parquet")
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env",         type=str, default="local")
+    parser.add_argument("--raw_path",    type=str, required=True)
+    parser.add_argument("--bronze_path", type=str, required=True)
+    # Thêm tham số ngày để chỉ xử lý 1 ngày cụ thể
+    parser.add_argument("--ds",          type=str, required=False,
+                        help="Ngày cần xử lý, format YYYY-MM-DD. Nếu không truyền thì full load.")
     args = parser.parse_args()
 
-    # Khởi tạo Spark Session tự động nhận diện Local hay Cluster
     spark = SparkSession.builder \
         .appName("Stage2_Bronze_Ingestion") \
         .config("spark.sql.session.timeZone", "UTC") \
         .getOrCreate()
-        
-    print(f"=== BẮT ĐẦU STAGE 2: BRONZE LAYER (Môi trường: {args.env.upper()}) ===")
-    
-    try:
-        print(f"Đang nạp dữ liệu thô từ: {args.raw_path}")
-        df_raw = spark.read \
-        .option("header", "true") \
-        .option("inferSchema", "true") \
-        .csv(f"{args.raw_path}")
-        
-        # Chạy logic xử lý
-        raw_validator(df_raw)
-        partition_writer(df_raw, args.bronze_path)
-        
-    except Exception as e:
-        print(f"Lỗi hệ thống tại Stage 2: {e}")
-        raise e
-    finally:
-        spark.stop()
-        print("=== HOÀN TẤT STAGE 2 ===")
+
+    if args.ds:
+        # Incremental: chỉ đọc đúng 1 ngày
+        d = datetime.strptime(args.ds, "%Y-%m-%d")
+        raw_path = f"gs://chicago-crime-raw-group15/raw/chicago_crime/{d.year}/{d.month:02d}/{d.day:02d}/data.csv"
+        print(f"INCREMENTAL mode: chỉ xử lý {args.ds}")
+    else:
+        raw_path = args.raw_path
+        print("FULL LOAD mode")
+
+    df_raw = spark.read.option("header", "true") \
+                       .option("inferSchema", "true") \
+                       .csv(raw_path)
+    raw_validator(df_raw)
+    partition_writer(df_raw, args.bronze_path)

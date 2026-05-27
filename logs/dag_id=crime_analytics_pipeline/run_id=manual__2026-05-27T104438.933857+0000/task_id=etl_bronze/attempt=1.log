@@ -12,3 +12,7 @@
 [2026-05-27T10:49:34.704+0000] {base.py:83} INFO - Using connection ID 'google_cloud_default' for task execution.
 [2026-05-27T10:49:36.380+0000] {dataproc.py:2220} INFO - Job e8370b65-2515-482b-9420-ef979fe67839 submitted successfully.
 [2026-05-27T10:49:36.400+0000] {dataproc.py:2254} INFO - Waiting for job e8370b65-2515-482b-9420-ef979fe67839 to complete
+[2026-05-27T11:29:52.580+0000] {dataproc.py:2258} INFO - Job e8370b65-2515-482b-9420-ef979fe67839 completed successfully.
+[2026-05-27T11:29:52.613+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=crime_analytics_pipeline, task_id=etl_bronze, execution_date=20260527T104438, start_date=20260527T104934, end_date=20260527T112952
+[2026-05-27T11:29:52.686+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-05-27T11:29:52.724+0000] {taskinstance.py:3280} INFO - 1 downstream tasks scheduled from follow-on schedule check

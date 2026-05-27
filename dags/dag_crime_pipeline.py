@@ -483,6 +483,7 @@ with DAG(
                 "--env=prod",
                 f"--raw_path=gs://{GCS_BUCKET}/raw/chicago_crime/*/*/*/data.csv",
                 f"--bronze_path=gs://{GCS_BUCKET}/bronze/chicago_crime",
+                "--ds={{ ds }}",
             ],
         ),
         region=GCP_REGION,
