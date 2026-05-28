@@ -36,14 +36,15 @@ DEV_MODE = False
 def main():
     logger.info("=== BẮT ĐẦU STAGE 3: SILVER LAYER ===")
     
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--bronze_path", required=True)
-    parser.add_argument("--silver_path", required=True)
-    parser.add_argument("--project",     required=False, default=GCP_PROJECT_ID)
-    args, _ = parser.parse_known_args()
-    bronze_path = args.bronze_path
-    silver_path = args.silver_path
+    config_path = os.path.join(project_root, "config", "config.yaml")
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+        
+    env = config.get("env", "local")
+    paths = config.get(env, {})
+    
+    bronze_path = paths.get("bronze_path")
+    silver_path = paths.get("silver_path")
     
     # KÍCH HOẠT DEV_MODE
     if DEV_MODE:

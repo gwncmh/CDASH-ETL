@@ -1121,3 +1121,21 @@
 [2026-05-28T08:35:55.777+0000] {processor.py:840} INFO - DAG(s) 'crime_analytics_pipeline' retrieved from /opt/airflow/dags/dag_crime_pipeline.py
 [2026-05-28T08:35:55.823+0000] {logging_mixin.py:188} INFO - [2026-05-28T08:35:55.822+0000] {dag.py:3036} INFO - Sync 1 DAGs
 [2026-05-28T08:35:55.875+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/dag_crime_pipeline.py took 0.157 seconds
+[2026-05-28T08:36:26.303+0000] {processor.py:161} INFO - Started process (PID=2518) to work on /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:36:26.305+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/dag_crime_pipeline.py for tasks to queue
+[2026-05-28T08:36:26.309+0000] {logging_mixin.py:188} INFO - [2026-05-28T08:36:26.308+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:36:26.355+0000] {processor.py:840} INFO - DAG(s) 'crime_analytics_pipeline' retrieved from /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:36:26.392+0000] {logging_mixin.py:188} INFO - [2026-05-28T08:36:26.391+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-05-28T08:36:26.457+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/dag_crime_pipeline.py took 0.162 seconds
+[2026-05-28T08:36:56.607+0000] {processor.py:161} INFO - Started process (PID=2523) to work on /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:36:56.609+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/dag_crime_pipeline.py for tasks to queue
+[2026-05-28T08:36:56.613+0000] {logging_mixin.py:188} INFO - [2026-05-28T08:36:56.612+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:36:56.660+0000] {processor.py:840} INFO - DAG(s) 'crime_analytics_pipeline' retrieved from /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:36:56.699+0000] {logging_mixin.py:188} INFO - [2026-05-28T08:36:56.699+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-05-28T08:36:56.777+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/dag_crime_pipeline.py took 0.175 seconds
+[2026-05-28T08:37:27.113+0000] {processor.py:161} INFO - Started process (PID=2528) to work on /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:37:27.115+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/dag_crime_pipeline.py for tasks to queue
+[2026-05-28T08:37:27.121+0000] {logging_mixin.py:188} INFO - [2026-05-28T08:37:27.121+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:37:27.175+0000] {processor.py:840} INFO - DAG(s) 'crime_analytics_pipeline' retrieved from /opt/airflow/dags/dag_crime_pipeline.py
+[2026-05-28T08:37:27.218+0000] {logging_mixin.py:188} INFO - [2026-05-28T08:37:27.217+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-05-28T08:37:27.269+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/dag_crime_pipeline.py took 0.172 seconds
