@@ -27,7 +27,7 @@ import os
 import pickle
 import warnings
 from typing import Optional
-
+import gc
 import numpy as np
 import pandas as pd
 from google.cloud import bigquery
@@ -115,7 +115,6 @@ BQ_PREDICTION_SCHEMA = [
     bigquery.SchemaField("hardship_index",    "FLOAT"),
     bigquery.SchemaField("unemployment_rate", "FLOAT"),
     bigquery.SchemaField("population_density","FLOAT"),
-    bigquery.SchemaField("h3_train_pct",      "FLOAT"),
     bigquery.SchemaField("roll_mean_7",       "FLOAT"),
     bigquery.SchemaField("roll_mean_30",      "FLOAT"),
     bigquery.SchemaField("zero_streak",       "FLOAT"),
@@ -441,24 +440,15 @@ def build_features(
     train_dates: list,
 ) -> pd.DataFrame:
     """
-    Toàn bộ feature engineering v11.
-    Nhóm features:
-      4A  Own-cell lag / rolling
-      4B  Burst / streak
-      4C  Crime-type composition
-      4D  Weather / context
-      4E  Community-level temporal
-      4F  City-level temporal
-      4G  H3 Spatial Spillover       (Routine Activity Theory)
-      4H  Train-only spatial priors
-      4I  Near-Repeat Victimization  (Near-Repeat Theory)
-      4J  Cross-Crime Lead-Lag       (Escalation Theory)
-      4K  Arrest Deterrence          (Deterrence Theory)
-      4L  Density-Normalized Crime
-      4M  Holiday / Seasonal Events  (Routine Activity Theory)
-      4N  Momentum + Trend Direction
-      4O  Hardship Interaction       (Social Disorganization Theory)
-      4P  Prior-relative features
+    Feature engineering v11 – RAM-optimised rewrite.
+
+    Thay đổi so với bản gốc:
+      - float32 thay float64 cho mọi cột số mới tạo ra (giảm ~50% RAM)
+      - del + gc.collect() sau mỗi block tốn nhiều bộ nhớ
+      - 4G: pivot dùng float32, tính nbr tuần tự rồi xoá ngay, không giữ
+            5 ma trận (4973×391) cùng lúc trong RAM
+      - 4G: _lag_melt trả về float32 ngay tại chỗ
+      - Bỏ biến trung gian không cần thiết
     """
     df = daily.sort_values(["h3_index", "date"]).reset_index(drop=True).copy()
     g  = df.groupby("h3_index", group_keys=False)
@@ -466,9 +456,9 @@ def build_features(
     # ── 4A  Own-cell lag / rolling ────────────────────────────────────────
     log.info("[ML]   [4A] Own-cell lag/rolling features")
     for lag in [1, 2, 3, 4, 5, 6, 7, 14, 21, 28]:
-        df[f"lag_{lag}"] = g["total_crimes"].shift(lag)
+        df[f"lag_{lag}"] = g["total_crimes"].shift(lag).astype("float32")
 
-    for col, prefix in [
+    for _col, prefix in [
         ("is_violent",   "violent"),
         ("is_property",  "property"),
         ("is_theft",     "theft"),
@@ -476,15 +466,15 @@ def build_features(
         ("is_narcotics", "narcotics"),
     ]:
         for lag in [1, 2, 3, 7, 14]:
-            df[f"{prefix}_lag_{lag}"] = g[col].shift(lag)
+            df[f"{prefix}_lag_{lag}"] = g[_col].shift(lag).astype("float32")
 
     for w in [3, 5, 7, 14, 21, 30, 45, 60, 90]:
         shifted = g["total_crimes"].shift(1)
         roll    = shifted.groupby(df["h3_index"]).rolling(w, min_periods=2)
-        df[f"roll_mean_{w}"] = roll.mean().reset_index(level=0, drop=True)
-        df[f"roll_sum_{w}"]  = roll.sum().reset_index(level=0, drop=True)
-        df[f"roll_std_{w}"]  = roll.std().reset_index(level=0, drop=True)
-        df[f"roll_max_{w}"]  = roll.max().reset_index(level=0, drop=True)
+        df[f"roll_mean_{w}"] = roll.mean().reset_index(level=0, drop=True).astype("float32")
+        df[f"roll_sum_{w}"]  = roll.sum().reset_index(level=0, drop=True).astype("float32")
+        df[f"roll_std_{w}"]  = roll.std().reset_index(level=0, drop=True).astype("float32")
+        df[f"roll_max_{w}"]  = roll.max().reset_index(level=0, drop=True).astype("float32")
 
     for span in [7, 14, 30, 60, 90]:
         df[f"ewm_{span}"] = (
@@ -494,6 +484,7 @@ def build_features(
             .ewm(span=span, adjust=False, min_periods=2)
             .mean()
             .reset_index(level=0, drop=True)
+            .astype("float32")
         )
 
     for w in [7, 14, 30, 60]:
@@ -504,6 +495,7 @@ def build_features(
             .rolling(w, min_periods=2)
             .mean()
             .reset_index(level=0, drop=True)
+            .astype("float32")
         )
 
     # ── 4B  Burst / streak ────────────────────────────────────────────────
@@ -516,20 +508,20 @@ def build_features(
             out.append(cnt)
         return pd.Series(out, index=s.index)
 
-    df["zero_today"]  = (df["total_crimes"] == 0).astype(int)
-    df["prev_crime"]  = g["crime_today"].shift(1)
-    df["zero_streak"] = g["total_crimes"].transform(zero_streak)
-    df["burst_3_30"]  = safe_ratio(df["roll_mean_3"],  df["roll_mean_30"],  default=0, clip=10)
-    df["burst_7_30"]  = safe_ratio(df["roll_mean_7"],  df["roll_mean_30"],  default=0, clip=10)
-    df["burst_14_60"] = safe_ratio(df["roll_mean_14"], df["roll_mean_60"],  default=0, clip=10)
+    df["zero_today"]  = (df["total_crimes"] == 0).astype("int8")
+    df["prev_crime"]  = g["crime_today"].shift(1).astype("float32")
+    df["zero_streak"] = g["total_crimes"].transform(zero_streak).astype("float32")
+    df["burst_3_30"]  = safe_ratio(df["roll_mean_3"],  df["roll_mean_30"],  default=0, clip=10).astype("float32")
+    df["burst_7_30"]  = safe_ratio(df["roll_mean_7"],  df["roll_mean_30"],  default=0, clip=10).astype("float32")
+    df["burst_14_60"] = safe_ratio(df["roll_mean_14"], df["roll_mean_60"],  default=0, clip=10).astype("float32")
     df["crime_z_30"]  = safe_ratio(
         df["total_crimes"] - df["roll_mean_30"].fillna(0),
         df["roll_std_30"].fillna(0), default=0, clip=10,
-    )
+    ).astype("float32")
     df["crime_z_90"]  = safe_ratio(
         df["total_crimes"] - df["roll_mean_90"].fillna(0),
         df["roll_std_90"].fillna(0), default=0, clip=10,
-    )
+    ).astype("float32")
 
     # ── 4C  Crime-type rolling composition ───────────────────────────────
     log.info("[ML]   [4C] Crime-type composition")
@@ -543,25 +535,26 @@ def build_features(
         shifted = g[col_name].shift(1)
         for w in [7, 14, 30]:
             rs = shifted.groupby(df["h3_index"]).rolling(w, min_periods=2).sum()
-            df[f"{prefix}_roll_sum_{w}"]   = rs.reset_index(level=0, drop=True)
+            df[f"{prefix}_roll_sum_{w}"]   = rs.reset_index(level=0, drop=True).astype("float32")
             df[f"{prefix}_roll_ratio_{w}"] = safe_ratio(
                 df[f"{prefix}_roll_sum_{w}"], df[f"roll_sum_{w}"], default=0, clip=1
-            )
+            ).astype("float32")
 
     # ── 4D  Weather / context ────────────────────────────────────────────
     log.info("[ML]   [4D] Weather/context features")
     for c in ["temp_max", "temp_min", "precipitation", "wind_speed"]:
         if c in df.columns:
-            df[f"{c}_lag1"]  = g[c].shift(1)
-            df[f"{c}_lag7"]  = g[c].shift(7)
+            df[f"{c}_lag1"]  = g[c].shift(1).astype("float32")
+            df[f"{c}_lag7"]  = g[c].shift(7).astype("float32")
             df[f"{c}_roll7"] = (
                 g[c].shift(1)
                 .groupby(df["h3_index"])
                 .rolling(7, min_periods=2)
                 .mean()
                 .reset_index(level=0, drop=True)
+                .astype("float32")
             )
-            df[f"{c}_diff1"] = df[c] - df[f"{c}_lag1"]
+            df[f"{c}_diff1"] = (df[c] - df[f"{c}_lag1"]).astype("float32")
 
     # ── 4E  Community-level temporal ─────────────────────────────────────
     log.info("[ML]   [4E] Community-level features")
@@ -589,23 +582,27 @@ def build_features(
             shifted.groupby(comm_daily["community_area"])
             .rolling(w, min_periods=2).mean()
             .reset_index(level=0, drop=True)
+            .astype("float32")
         )
         comm_daily[f"comm_roll_sum_{w}"] = (
             shifted.groupby(comm_daily["community_area"])
             .rolling(w, min_periods=2).sum()
             .reset_index(level=0, drop=True)
+            .astype("float32")
         )
     comm_daily["comm_burst_7_30"] = safe_ratio(
         comm_daily["comm_roll_mean_7"], comm_daily["comm_roll_mean_30"], default=0, clip=10
-    )
+    ).astype("float32")
     n_h3_per_comm = df.groupby("community_area")["h3_index"].nunique().reset_index()
     n_h3_per_comm.columns = ["community_area", "n_h3_in_comm"]
     comm_daily = comm_daily.merge(n_h3_per_comm, on="community_area", how="left")
     comm_daily["comm_active_rate"] = safe_ratio(
         comm_daily["comm_active"], comm_daily["n_h3_in_comm"], default=0, clip=1
-    )
+    ).astype("float32")
     drop_cols = ["comm_total", "comm_active", "comm_violent", "comm_property", "comm_arrests"]
     df = df.merge(comm_daily.drop(columns=drop_cols), on=["community_area", "date"], how="left")
+    del comm_daily, n_h3_per_comm
+    gc.collect()
 
     # ── 4F  City-level context ───────────────────────────────────────────
     log.info("[ML]   [4F] City-level features")
@@ -620,92 +617,152 @@ def build_features(
         )
     )
     for c in ["city_total", "city_active", "city_violent", "city_property"]:
-        city_daily[f"{c}_lag1"] = city_daily[c].shift(1)
+        city_daily[f"{c}_lag1"] = city_daily[c].shift(1).astype("float32")
         for w in [7, 14, 30]:
             city_daily[f"{c}_roll_mean_{w}"] = (
-                city_daily[c].shift(1).rolling(w, min_periods=2).mean()
+                city_daily[c].shift(1).rolling(w, min_periods=2).mean().astype("float32")
             )
     city_daily["city_burst_7_30"] = safe_ratio(
         city_daily["city_total_roll_mean_7"],
         city_daily["city_total_roll_mean_30"],
         default=0, clip=10,
-    )
+    ).astype("float32")
     drop_city = ["city_total", "city_active", "city_violent", "city_property", "city_arrests"]
     df = df.merge(city_daily.drop(columns=drop_city), on="date", how="left")
     df["h3_city_share_7"]  = safe_ratio(
         df["roll_mean_7"],  df["city_total_roll_mean_7"]  + 1e-3, default=0, clip=1
-    )
+    ).astype("float32")
     df["h3_city_share_30"] = safe_ratio(
         df["roll_mean_30"], df["city_total_roll_mean_30"] + 1e-3, default=0, clip=1
-    )
+    ).astype("float32")
+    del city_daily
+    gc.collect()
 
     # ── 4G  Spatial Spillover (H3 neighbors) ─────────────────────────────
+    # RAM-OPTIMISED: dùng float32, tính từng loại nbr rồi xoá ngay,
+    # không giữ 5 ma trận (n_h3 × n_dates) cùng lúc trong bộ nhớ.
     log.info("[ML]   [4G] H3 spatial spillover (Routine Activity Theory)")
     if has_h3:
-        crime_pivot  = daily.pivot_table(
+        # --- Pivot với float32 để tiết kiệm 50% RAM so với float64 ---
+        pivot_src = daily[["date", "h3_index", "total_crimes", "crime_today"]].copy()
+        pivot_src["total_crimes"] = pivot_src["total_crimes"].astype("float32")
+        pivot_src["crime_today"]  = pivot_src["crime_today"].astype("float32")
+
+        crime_pivot  = pivot_src.pivot_table(
             index="date", columns="h3_index", values="total_crimes", fill_value=0
-        )
-        active_pivot = daily.pivot_table(
+        ).astype("float32")
+        active_pivot = pivot_src.pivot_table(
             index="date", columns="h3_index", values="crime_today", fill_value=0
-        )
+        ).astype("float32")
+        del pivot_src
+        gc.collect()
 
-        nbr_r1_mean_d   = pd.DataFrame(0.0, index=crime_pivot.index, columns=crime_pivot.columns)
-        nbr_r1_sum_d    = pd.DataFrame(0.0, index=crime_pivot.index, columns=crime_pivot.columns)
-        nbr_r1_max_d    = pd.DataFrame(0.0, index=crime_pivot.index, columns=crime_pivot.columns)
-        nbr_r1_active_d = pd.DataFrame(0.0, index=crime_pivot.index, columns=crime_pivot.columns)
-        nbr_r2_mean_d   = pd.DataFrame(0.0, index=crime_pivot.index, columns=crime_pivot.columns)
+        h3_cols    = crime_pivot.columns.tolist()
+        date_index = crime_pivot.index
 
-        for cell in crime_pivot.columns:
-            r1 = [c for c in nbr_r1.get(cell, []) if c in crime_pivot.columns]
-            r2 = [c for c in nbr_r2.get(cell, []) if c in crime_pivot.columns]
-            if r1:
-                nbr_r1_mean_d[cell]   = crime_pivot[r1].mean(axis=1)
-                nbr_r1_sum_d[cell]    = crime_pivot[r1].sum(axis=1)
-                nbr_r1_max_d[cell]    = crime_pivot[r1].max(axis=1)
-                nbr_r1_active_d[cell] = active_pivot[r1].mean(axis=1)
-            if r2:
-                nbr_r2_mean_d[cell] = crime_pivot[r2].mean(axis=1)
+        def _build_nbr_matrix(src_pivot: pd.DataFrame, nbr_map: dict, agg: str) -> pd.DataFrame:
+            """
+            Tính ma trận neighbour (n_dates × n_h3) theo agg = mean/sum/max.
+            Dùng numpy để tránh overhead của pandas, trả về float32.
+            """
+            h3_pos = {cell: i for i, cell in enumerate(h3_cols)}
+            src_np = src_pivot.values  # shape: (n_dates, n_h3), float32
+
+            out_np = np.zeros_like(src_np, dtype="float32")
+            for i, cell in enumerate(h3_cols):
+                nbrs = [h3_pos[n] for n in nbr_map.get(cell, []) if n in h3_pos]
+                if not nbrs:
+                    continue
+                nbr_vals = src_np[:, nbrs]   # (n_dates, k)
+                if agg == "mean":
+                    out_np[:, i] = nbr_vals.mean(axis=1)
+                elif agg == "sum":
+                    out_np[:, i] = nbr_vals.sum(axis=1)
+                elif agg == "max":
+                    out_np[:, i] = nbr_vals.max(axis=1)
+
+            return pd.DataFrame(out_np, index=date_index, columns=h3_cols)
 
         def _lag_melt(piv: pd.DataFrame, col_name: str) -> pd.DataFrame:
-            return (
+            """shift(1) → melt → float32, xoá pivot ngay sau khi dùng."""
+            melted = (
                 piv.shift(1)
                 .reset_index()
                 .melt(id_vars="date", var_name="h3_index", value_name=col_name)
             )
+            melted[col_name] = melted[col_name].astype("float32")
+            return melted
 
+        # Tính từng loại nbr, melt ngay, xoá ma trận lớn trước khi tính cái tiếp theo
+        log.info("[ML]     [4G] computing nbr_r1_mean ...")
+        nbr_r1_mean_d = _build_nbr_matrix(crime_pivot, nbr_r1, "mean")
+        nbr_merged    = _lag_melt(nbr_r1_mean_d, "nbr_r1_mean")
+
+        # nbr_r1_roll7 cần nbr_r1_mean_d → tính luôn trước khi xoá
+        log.info("[ML]     [4G] computing nbr_r1_roll7 ...")
         nbr_roll7_melt = (
             nbr_r1_mean_d.shift(1).rolling(7, min_periods=2).mean()
             .reset_index()
             .melt(id_vars="date", var_name="h3_index", value_name="nbr_r1_roll7")
         )
+        nbr_roll7_melt["nbr_r1_roll7"] = nbr_roll7_melt["nbr_r1_roll7"].astype("float32")
+        del nbr_r1_mean_d
+        gc.collect()
 
-        nbr_merged = _lag_melt(nbr_r1_mean_d,   "nbr_r1_mean")
-        for nd in [
-            _lag_melt(nbr_r1_sum_d,    "nbr_r1_sum"),
-            _lag_melt(nbr_r1_max_d,    "nbr_r1_max"),
-            _lag_melt(nbr_r1_active_d, "nbr_r1_active_rate"),
-            _lag_melt(nbr_r2_mean_d,   "nbr_r2_mean"),
-            nbr_roll7_melt,
-        ]:
-            nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
+        log.info("[ML]     [4G] computing nbr_r1_sum ...")
+        nbr_r1_sum_d = _build_nbr_matrix(crime_pivot, nbr_r1, "sum")
+        nd = _lag_melt(nbr_r1_sum_d, "nbr_r1_sum")
+        nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
+        del nbr_r1_sum_d, nd
+        gc.collect()
 
+        log.info("[ML]     [4G] computing nbr_r1_max ...")
+        nbr_r1_max_d = _build_nbr_matrix(crime_pivot, nbr_r1, "max")
+        nd = _lag_melt(nbr_r1_max_d, "nbr_r1_max")
+        nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
+        del nbr_r1_max_d, nd
+        gc.collect()
+
+        log.info("[ML]     [4G] computing nbr_r1_active_rate ...")
+        nbr_r1_active_d = _build_nbr_matrix(active_pivot, nbr_r1, "mean")
+        nd = _lag_melt(nbr_r1_active_d, "nbr_r1_active_rate")
+        nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
+        del nbr_r1_active_d, nd, active_pivot
+        gc.collect()
+
+        log.info("[ML]     [4G] computing nbr_r2_mean ...")
+        nbr_r2_mean_d = _build_nbr_matrix(crime_pivot, nbr_r2, "mean")
+        nd = _lag_melt(nbr_r2_mean_d, "nbr_r2_mean")
+        nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
+        del nbr_r2_mean_d, nd, crime_pivot
+        gc.collect()
+
+        # Gắn nbr_roll7
+        nbr_merged = nbr_merged.merge(nbr_roll7_melt, on=["date", "h3_index"], how="left")
+        del nbr_roll7_melt
+        gc.collect()
+
+        # Merge vào df chính
         df = df.merge(nbr_merged, on=["date", "h3_index"], how="left")
-        nbr_cols = [
-            "nbr_r1_mean", "nbr_r1_sum", "nbr_r1_max",
-            "nbr_r1_active_rate", "nbr_r2_mean", "nbr_r1_roll7",
-        ]
-        for c in nbr_cols:
-            df[c] = df[c].fillna(0)
+        del nbr_merged
+        gc.collect()
 
-        df["h3_vs_nbr_r1"]  = safe_ratio(df["roll_mean_7"], df["nbr_r1_mean"] + 1e-3, default=0, clip=20)
-        df["h3_above_nbr"]  = (df["lag_1"] > df["nbr_r1_mean"]).astype(int)
-        df["nbr_contagion"] = (df["nbr_r1_active_rate"] > 0.5).astype(int)
+        for c in ["nbr_r1_mean", "nbr_r1_sum", "nbr_r1_max",
+                  "nbr_r1_active_rate", "nbr_r2_mean", "nbr_r1_roll7"]:
+            df[c] = df[c].fillna(0).astype("float32")
+
+        df["h3_vs_nbr_r1"]  = safe_ratio(
+            df["roll_mean_7"], df["nbr_r1_mean"] + 1e-3, default=0, clip=20
+        ).astype("float32")
+        df["h3_above_nbr"]  = (df["lag_1"] > df["nbr_r1_mean"]).astype("int8")
+        df["nbr_contagion"] = (df["nbr_r1_active_rate"] > 0.5).astype("int8")
+
         log.info("[ML]     ✓ Spatial spillover features added")
     else:
         for c in ["nbr_r1_mean", "nbr_r1_sum", "nbr_r1_max",
                   "nbr_r1_active_rate", "nbr_r2_mean", "nbr_r1_roll7",
                   "h3_vs_nbr_r1", "h3_above_nbr", "nbr_contagion"]:
-            df[c] = 0.0
+            df[c] = np.float32(0)
         log.warning("[ML]     ⚠️  Spatial spillover skipped (h3 not installed)")
 
     # ── 4H  Train-only spatial priors ─────────────────────────────────────
@@ -721,7 +778,7 @@ def build_features(
         "h3_index", "h3_train_mean", "h3_train_std",
         "h3_train_sum", "h3_train_max",
     ]
-    h3_prior["h3_train_percentile"]  = h3_prior["h3_train_mean"].rank(pct=True)
+    h3_prior["h3_train_percentile"]  = h3_prior["h3_train_mean"].rank(pct=True).astype("float32")
     h3_prior["h3_train_active_rate"] = (
         df.loc[train_mask_prior]
         .groupby("h3_index")["crime_today"]
@@ -730,6 +787,7 @@ def build_features(
         .values
     )
     df = df.merge(h3_prior, on="h3_index", how="left")
+    del h3_prior
 
     comm_prior = (
         df.loc[train_mask_prior]
@@ -741,8 +799,10 @@ def build_features(
         "community_area", "comm_train_mean", "comm_train_std",
         "comm_train_sum", "comm_train_max",
     ]
-    comm_prior["comm_train_percentile"] = comm_prior["comm_train_mean"].rank(pct=True)
+    comm_prior["comm_train_percentile"] = comm_prior["comm_train_mean"].rank(pct=True).astype("float32")
     df = df.merge(comm_prior, on="community_area", how="left")
+    del comm_prior
+    gc.collect()
 
     for c in [
         "h3_train_mean", "h3_train_std", "h3_train_sum", "h3_train_max",
@@ -751,31 +811,33 @@ def build_features(
         "comm_train_max", "comm_train_percentile",
     ]:
         if c in df.columns:
-            df[c] = df[c].fillna(0)
+            df[c] = df[c].fillna(0).astype("float32")
 
     # ── 4I  Near-Repeat Victimization ─────────────────────────────────────
     log.info("[ML]   [4I] Near-repeat victimization (Near-Repeat Theory)")
-    df["had_crime_1d"]   = (g["total_crimes"].shift(1) > 0).astype(int)
-    df["had_crime_2d"]   = (g["total_crimes"].shift(2) > 0).astype(int)
-    df["had_crime_3d"]   = (g["total_crimes"].shift(3) > 0).astype(int)
-    df["near_repeat_3d"] = df["had_crime_1d"] + df["had_crime_2d"] + df["had_crime_3d"]
+    df["had_crime_1d"]   = (g["total_crimes"].shift(1) > 0).astype("int8")
+    df["had_crime_2d"]   = (g["total_crimes"].shift(2) > 0).astype("int8")
+    df["had_crime_3d"]   = (g["total_crimes"].shift(3) > 0).astype("int8")
+    df["near_repeat_3d"] = (df["had_crime_1d"] + df["had_crime_2d"] + df["had_crime_3d"]).astype("int8")
     df["near_repeat_5d"] = sum(
         [(g["total_crimes"].shift(i) > 0).astype(int) for i in range(1, 6)]
-    )
+    ).astype("int8")
     df["reactivation"] = (
         (df["zero_streak"] >= 3) & (g["total_crimes"].shift(1) > 0)
-    ).astype(int)
+    ).astype("int8")
 
     # ── 4J  Cross-Crime Lead-Lag ───────────────────────────────────────────
     log.info("[ML]   [4J] Cross-crime lead-lag (Escalation Theory)")
     df["property_lead_violent"]    = (
         g["is_property"].shift(1) * (g["is_violent"].shift(1) == 0)
-    ).astype(float)
-    df["narcotics_before_violent"] = (g["is_narcotics"].shift(1) > 0).astype(int)
+    ).astype("float32")
+    df["narcotics_before_violent"] = (g["is_narcotics"].shift(1) > 0).astype("int8")
     if "violent_lag_1" in df.columns and "property_lag_1" in df.columns:
-        df["violent_x_property_lag1"] = df["violent_lag_1"] * df["property_lag_1"]
+        df["violent_x_property_lag1"] = (
+            df["violent_lag_1"] * df["property_lag_1"]
+        ).astype("float32")
     else:
-        df["violent_x_property_lag1"] = 0.0
+        df["violent_x_property_lag1"] = np.float32(0)
 
     # ── 4K  Arrest Deterrence ─────────────────────────────────────────────
     log.info("[ML]   [4K] Arrest deterrence (Deterrence Theory)")
@@ -784,87 +846,110 @@ def build_features(
         .groupby(df["h3_index"])
         .rolling(7,  min_periods=2).sum()
         .reset_index(level=0, drop=True)
+        .astype("float32")
     )
     df["arrest_roll_30"] = (
         g["arrest_num"].shift(1)
         .groupby(df["h3_index"])
         .rolling(30, min_periods=2).sum()
         .reset_index(level=0, drop=True)
+        .astype("float32")
     )
     df["arrest_rate_7"]  = safe_ratio(
         df["arrest_roll_7"],  df["roll_sum_7"]  + 1e-3, default=0, clip=1
-    )
+    ).astype("float32")
     df["arrest_rate_30"] = safe_ratio(
         df["arrest_roll_30"], df["roll_sum_30"] + 1e-3, default=0, clip=1
-    )
-    df["deterrence_signal"] = df["arrest_rate_7"] * (1 - df["burst_7_30"].clip(0, 1))
+    ).astype("float32")
+    df["deterrence_signal"] = (
+        df["arrest_rate_7"] * (1 - df["burst_7_30"].clip(0, 1))
+    ).astype("float32")
 
     # ── 4L  Density-Normalized Crime ──────────────────────────────────────
     log.info("[ML]   [4L] Density-normalized crime")
     if "population_density" in df.columns:
         pop = df["population_density"].clip(lower=1)
-        df["crime_per_1000pop"]       = safe_ratio(df["total_crimes"] * 1000, pop, default=0, clip=50)
-        df["crime_roll7_per_1000pop"] = safe_ratio(df["roll_mean_7"]  * 1000, pop, default=0, clip=50)
+        df["crime_per_1000pop"]       = safe_ratio(
+            df["total_crimes"] * 1000, pop, default=0, clip=50
+        ).astype("float32")
+        df["crime_roll7_per_1000pop"] = safe_ratio(
+            df["roll_mean_7"]  * 1000, pop, default=0, clip=50
+        ).astype("float32")
         city_avg_rate = df["total_crimes"].sum() / max(pop.sum(), 1)
-        df["crime_vs_density_expected"] = df["total_crimes"] - (pop * city_avg_rate)
+        df["crime_vs_density_expected"] = (
+            df["total_crimes"] - (pop * city_avg_rate)
+        ).astype("float32")
     else:
-        df["crime_per_1000pop"] = df["total_crimes"]
+        df["crime_per_1000pop"] = df["total_crimes"].astype("float32")
 
     # ── 4M  Holiday / Seasonal Events ─────────────────────────────────────
     log.info("[ML]   [4M] Holiday/event features (Routine Activity Theory)")
     hol_df = holiday_features(df["date"], ALL_HOLIDAYS)
+    # holiday_features trả về float64 — downcast luôn
+    for c in hol_df.columns:
+        hol_df[c] = hol_df[c].astype("float32")
     df = pd.concat([df, hol_df], axis=1)
+    del hol_df
+    gc.collect()
 
     # ── 4N  Momentum + Trend Direction ────────────────────────────────────
     log.info("[ML]   [4N] Momentum and trend direction")
     df["trend_slope_7_14"]  = safe_ratio(
         df["roll_mean_7"]  - df["roll_mean_14"],
         df["roll_mean_14"] + 1e-3, default=0, clip=5,
-    )
+    ).astype("float32")
     df["trend_slope_14_30"] = safe_ratio(
         df["roll_mean_14"] - df["roll_mean_30"],
         df["roll_mean_30"] + 1e-3, default=0, clip=5,
-    )
-    df["trend_direction"]   = np.sign(df["trend_slope_7_14"])
-    df["crime_acceleration"] = df["trend_slope_7_14"] - df["trend_slope_14_30"]
+    ).astype("float32")
+    df["trend_direction"]    = np.sign(df["trend_slope_7_14"]).astype("float32")
+    df["crime_acceleration"] = (df["trend_slope_7_14"] - df["trend_slope_14_30"]).astype("float32")
     df["same_dow_roll8"] = (
         df.assign(_c=df["total_crimes"], _dow=df["dayofweek"])
         .groupby(["h3_index", "_dow"])["_c"]
         .transform(lambda s: s.shift(1).rolling(8, min_periods=2).mean())
+        .astype("float32")
     )
     df["same_dow_vs_overall"] = safe_ratio(
         df["same_dow_roll8"], df["roll_mean_30"] + 1e-3, default=0, clip=5
-    )
+    ).astype("float32")
 
     # ── 4O  Hardship Interaction ───────────────────────────────────────────
     log.info("[ML]   [4O] Hardship interaction (Social Disorganization Theory)")
     if "hardship_index" in df.columns:
-        hi = df["hardship_index"].fillna(0)
-        df["hardship_x_roll7"]       = hi * df["roll_mean_7"].fillna(0)
-        df["hardship_x_active_rate"] = hi * df.get("active_rate_7", pd.Series(0, index=df.index)).fillna(0)
-        df["hardship_x_nbr_r1"]      = hi * df["nbr_r1_mean"].fillna(0)
+        hi = df["hardship_index"].fillna(0).astype("float32")
+        df["hardship_x_roll7"]       = (hi * df["roll_mean_7"].fillna(0)).astype("float32")
+        df["hardship_x_active_rate"] = (
+            hi * df.get("active_rate_7", pd.Series(0, index=df.index)).fillna(0)
+        ).astype("float32")
+        df["hardship_x_nbr_r1"]      = (hi * df["nbr_r1_mean"].fillna(0)).astype("float32")
     if "unemployment_rate" in df.columns:
-        unemp = df["unemployment_rate"].fillna(0)
-        df["unemployment_x_reactivation"] = unemp * df["reactivation"].fillna(0)
-        df["unemployment_x_zero_streak"]  = unemp * (df["zero_streak"] > 7).astype(float)
+        unemp = df["unemployment_rate"].fillna(0).astype("float32")
+        df["unemployment_x_reactivation"] = (unemp * df["reactivation"].fillna(0)).astype("float32")
+        df["unemployment_x_zero_streak"]  = (
+            unemp * (df["zero_streak"] > 7).astype("float32")
+        ).astype("float32")
 
     # ── 4P  Prior-relative features ───────────────────────────────────────
     log.info("[ML]   [4P] Prior-relative features")
     df["h3_vs_comm_prior"]     = safe_ratio(
         df["h3_train_mean"], df["comm_train_mean"] + 1e-3, default=0, clip=20
-    )
+    ).astype("float32")
     df["h3_recent_vs_comm"]    = safe_ratio(
-        df["roll_mean_7"],  df.get("comm_roll_mean_7", pd.Series(1, index=df.index)) + 1e-3,
+        df["roll_mean_7"],
+        df.get("comm_roll_mean_7", pd.Series(1, index=df.index)) + 1e-3,
         default=0, clip=20,
-    )
-    df["high_prior_x_weekend"] = df["h3_train_percentile"] * df["is_weekend"]
-    df["high_prior_x_friday"]  = df["h3_train_percentile"] * df["is_friday"]
-    df["high_prior_x_holiday"] = df["h3_train_percentile"] * df.get("is_holiday", 0)
+    ).astype("float32")
+    df["high_prior_x_weekend"] = (df["h3_train_percentile"] * df["is_weekend"]).astype("float32")
+    df["high_prior_x_friday"]  = (df["h3_train_percentile"] * df["is_friday"]).astype("float32")
+    df["high_prior_x_holiday"] = (
+        df["h3_train_percentile"] * df.get("is_holiday", 0)
+    ).astype("float32")
     df["active_rate_vs_train"] = safe_ratio(
         df.get("active_rate_7", df["roll_mean_7"]),
         df["h3_train_active_rate"] + 1e-3,
         default=0, clip=10,
-    )
+    ).astype("float32")
 
     log.info("[ML] Feature engineering done. Shape: %s", df.shape)
     return df

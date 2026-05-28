@@ -1,0 +1,42 @@
+[2026-05-28T12:37:36.387+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [queued]>
+[2026-05-28T12:37:36.397+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [queued]>
+[2026-05-28T12:37:36.397+0000] {taskinstance.py:2170} INFO - Starting attempt 2 of 3
+[2026-05-28T12:37:36.410+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-28 10:50:32.435865+00:00
+[2026-05-28T12:37:36.419+0000] {standard_task_runner.py:60} INFO - Started process 24522 to run task
+[2026-05-28T12:37:36.423+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-05-28T10:50:32.435865+00:00', '--job-id', '292', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpzvvoqz1e']
+[2026-05-28T12:37:36.426+0000] {standard_task_runner.py:88} INFO - Job 292: Subtask ml_train_and_predict
+[2026-05-28T12:37:36.497+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [running]> on host db8b8170dea9
+[2026-05-28T12:37:36.613+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-28T10:50:32.435865+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-28T10:50:32.435865+00:00'
+[2026-05-28T12:37:37.529+0000] {ml_pipeline.py:1136} INFO - ========================================================================
+[2026-05-28T12:37:37.530+0000] {ml_pipeline.py:1137} INFO -   Chicago Crime Hotspot Forecasting  –  ml_pipeline v11
+[2026-05-28T12:37:37.531+0000] {ml_pipeline.py:1138} INFO -   Target: next_has_crime = (next_total >= 1) | schema OK
+[2026-05-28T12:37:37.532+0000] {ml_pipeline.py:1139} INFO - ========================================================================
+[2026-05-28T12:37:37.597+0000] {ml_pipeline.py:252} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-05-28T12:37:46.483+0000] {ml_pipeline.py:314} INFO - [ML] Loaded 250276 rows, date range: 2025-04-23 → 2026-05-18
+[2026-05-28T12:37:46.484+0000] {ml_pipeline.py:328} INFO - [ML] Aggregating daily per H3...
+[2026-05-28T12:38:05.678+0000] {ml_pipeline.py:399} INFO - [ML] Daily grid: 1,944,443 rows, 4973 H3 cells, 391 dates
+[2026-05-28T12:38:05.766+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/dag_crime_pipeline.py", line 298, in _run_ml_pipeline
+    result = train_and_predict(
+             ^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1151, in train_and_predict
+    nbr_r1, nbr_r2, has_h3 = build_neighbor_maps(all_h3)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 418, in build_neighbor_maps
+    disk1 = set(h3lib.grid_disk(cell, 1))
+                ^^^^^^^^^^^^^^^
+AttributeError: module 'h3' has no attribute 'grid_disk'
+[2026-05-28T12:38:05.795+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260528T105032, start_date=20260528T123736, end_date=20260528T123805
+[2026-05-28T12:38:05.814+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 292 for task ml_train_and_predict (module 'h3' has no attribute 'grid_disk'; 24522)
+[2026-05-28T12:38:05.945+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-05-28T12:38:05.978+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

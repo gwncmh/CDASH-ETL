@@ -1,0 +1,90 @@
+[2026-05-28T13:12:27.796+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [queued]>
+[2026-05-28T13:12:27.807+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [queued]>
+[2026-05-28T13:12:27.808+0000] {taskinstance.py:2170} INFO - Starting attempt 5 of 6
+[2026-05-28T13:12:27.821+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-28 10:50:32.435865+00:00
+[2026-05-28T13:12:27.832+0000] {standard_task_runner.py:60} INFO - Started process 25040 to run task
+[2026-05-28T13:12:27.836+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-05-28T10:50:32.435865+00:00', '--job-id', '295', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpeli_786u']
+[2026-05-28T13:12:27.842+0000] {standard_task_runner.py:88} INFO - Job 295: Subtask ml_train_and_predict
+[2026-05-28T13:12:27.925+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [running]> on host db8b8170dea9
+[2026-05-28T13:12:28.064+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-28T10:50:32.435865+00:00' AIRFLOW_CTX_TRY_NUMBER='5' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-28T10:50:32.435865+00:00'
+[2026-05-28T13:12:29.866+0000] {ml_pipeline.py:1222} INFO - ========================================================================
+[2026-05-28T13:12:29.867+0000] {ml_pipeline.py:1223} INFO -   Chicago Crime Hotspot Forecasting  –  ml_pipeline v11
+[2026-05-28T13:12:29.867+0000] {ml_pipeline.py:1224} INFO -   Target: next_has_crime = (next_total >= 1) | schema OK
+[2026-05-28T13:12:29.868+0000] {ml_pipeline.py:1225} INFO - ========================================================================
+[2026-05-28T13:12:29.953+0000] {ml_pipeline.py:252} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-05-28T13:12:37.956+0000] {ml_pipeline.py:314} INFO - [ML] Loaded 250276 rows, date range: 2025-04-23 → 2026-05-18
+[2026-05-28T13:12:37.956+0000] {ml_pipeline.py:328} INFO - [ML] Aggregating daily per H3...
+[2026-05-28T13:12:55.442+0000] {ml_pipeline.py:399} INFO - [ML] Daily grid: 1,944,443 rows, 4973 H3 cells, 391 dates
+[2026-05-28T13:12:55.627+0000] {ml_pipeline.py:423} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.5
+[2026-05-28T13:12:57.226+0000] {ml_pipeline.py:1261} INFO - [ML] Split  Train: 2025-10-22→2026-04-19 (180 d)  Val: 2026-05-04→2026-05-10  Test: 2026-05-11→2026-05-17
+[2026-05-28T13:12:58.521+0000] {ml_pipeline.py:458} INFO - [ML]   [4A] Own-cell lag/rolling features
+[2026-05-28T13:13:44.389+0000] {ml_pipeline.py:503} INFO - [ML]   [4B] Burst/streak features
+[2026-05-28T13:13:45.725+0000] {ml_pipeline.py:528} INFO - [ML]   [4C] Crime-type composition
+[2026-05-28T13:14:01.246+0000] {ml_pipeline.py:545} INFO - [ML]   [4D] Weather/context features
+[2026-05-28T13:14:05.858+0000] {ml_pipeline.py:561} INFO - [ML]   [4E] Community-level features
+[2026-05-28T13:14:10.616+0000] {ml_pipeline.py:609} INFO - [ML]   [4F] City-level features
+[2026-05-28T13:14:13.514+0000] {ml_pipeline.py:645} INFO - [ML]   [4G] H3 spatial spillover (Routine Activity Theory)
+[2026-05-28T13:14:15.130+0000] {ml_pipeline.py:698} INFO - [ML]     [4G] computing nbr_r1_mean ...
+[2026-05-28T13:14:15.427+0000] {ml_pipeline.py:703} INFO - [ML]     [4G] computing nbr_r1_roll7 ...
+[2026-05-28T13:14:16.325+0000] {ml_pipeline.py:713} INFO - [ML]     [4G] computing nbr_r1_sum ...
+[2026-05-28T13:14:17.359+0000] {ml_pipeline.py:720} INFO - [ML]     [4G] computing nbr_r1_max ...
+[2026-05-28T13:14:18.557+0000] {ml_pipeline.py:727} INFO - [ML]     [4G] computing nbr_r1_active_rate ...
+[2026-05-28T13:14:19.690+0000] {ml_pipeline.py:734} INFO - [ML]     [4G] computing nbr_r2_mean ...
+[2026-05-28T13:14:24.450+0000] {ml_pipeline.py:761} INFO - [ML]     ✓ Spatial spillover features added
+[2026-05-28T13:14:24.450+0000] {ml_pipeline.py:770} INFO - [ML]   [4H] Train-only spatial priors
+[2026-05-28T13:14:30.276+0000] {ml_pipeline.py:818} INFO - [ML]   [4I] Near-repeat victimization (Near-Repeat Theory)
+[2026-05-28T13:14:30.410+0000] {ml_pipeline.py:831} INFO - [ML]   [4J] Cross-crime lead-lag (Escalation Theory)
+[2026-05-28T13:14:30.477+0000] {ml_pipeline.py:844} INFO - [ML]   [4K] Arrest deterrence (Deterrence Theory)
+[2026-05-28T13:14:32.683+0000] {ml_pipeline.py:870} INFO - [ML]   [4L] Density-normalized crime
+[2026-05-28T13:14:32.733+0000] {ml_pipeline.py:887} INFO - [ML]   [4M] Holiday/event features (Routine Activity Theory)
+[2026-05-28T13:14:53.971+0000] {ml_pipeline.py:897} INFO - [ML]   [4N] Momentum and trend direction
+[2026-05-28T13:15:03.765+0000] {ml_pipeline.py:919} INFO - [ML]   [4O] Hardship interaction (Social Disorganization Theory)
+[2026-05-28T13:15:03.932+0000] {ml_pipeline.py:935} INFO - [ML]   [4P] Prior-relative features
+[2026-05-28T13:15:04.013+0000] {ml_pipeline.py:955} INFO - [ML] Feature engineering done. Shape: (1944443, 263)
+[2026-05-28T13:15:06.152+0000] {ml_pipeline.py:980} INFO - [ML] Preparing train/calib/val/test splits...
+[2026-05-28T13:15:22.739+0000] {ml_pipeline.py:1032} INFO - [ML] Train=895140  Calib=69622  Val=34811  Test=34811  features=254
+[2026-05-28T13:15:22.741+0000] {ml_pipeline.py:1034} INFO - [ML] Positive rate train=10.05%  scale_pos_weight=8.95
+[2026-05-28T13:15:27.207+0000] {logging_mixin.py:188} INFO - [0]	validation_0-aucpr:0.30200	validation_1-aucpr:0.29401
+[2026-05-28T13:16:36.594+0000] {logging_mixin.py:188} INFO - [174]	validation_0-aucpr:0.30890	validation_1-aucpr:0.29829
+[2026-05-28T13:16:36.603+0000] {ml_pipeline.py:1046} INFO - [ML] Training done. Best iteration: 55
+[2026-05-28T13:16:43.951+0000] {ml_pipeline.py:1068} INFO - [ML] VAL  – P=0.2453 R=0.5892 F1=0.3464 AUC=0.7665 AP=0.3083
+[2026-05-28T13:16:43.952+0000] {ml_pipeline.py:1073} INFO - [ML] TEST – P=0.2082 R=0.5898 F1=0.3078 AUC=0.7598 AP=0.2649
+[2026-05-28T13:16:43.953+0000] {ml_pipeline.py:1078} INFO - [ML] Calibrated threshold (F1-optimal on CALIB): 0.64
+[2026-05-28T13:16:43.996+0000] {ml_pipeline.py:1104} INFO - [ML] Feature day: 2026-05-18  →  Prediction day: 2026-05-19  (4973 H3 cells)
+[2026-05-28T13:16:44.185+0000] {ml_pipeline.py:1142} INFO - [ML] Predictions – cells=4973  predicted_crime=1299 (26.1%)
+[2026-05-28T13:16:44.194+0000] {ml_pipeline.py:1146} INFO - [ML] Risk distribution:
+risk_level
+LOW          660
+MEDIUM      2636
+HIGH        1599
+CRITICAL      78
+[2026-05-28T13:16:44.196+0000] {ml_pipeline.py:1169} INFO - [ML] Writing 4973 predictions → sage-mind-489618-n5.cdash_warehouse.prediction_results (mode=WRITE_TRUNCATE)
+[2026-05-28T13:16:44.206+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/dag_crime_pipeline.py", line 298, in _run_ml_pipeline
+    result = train_and_predict(
+             ^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1287, in train_and_predict
+    write_predictions_to_bq(client, df_pred, project_id, dataset, predictions_table, write_mode)
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1186, in write_predictions_to_bq
+    job = client.load_table_from_dataframe(df_to_write, dest, job_config=job_config)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/cloud/bigquery/client.py", line 2680, in load_table_from_dataframe
+    new_job_config.schema = _pandas_helpers.dataframe_to_bq_schema(
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/cloud/bigquery/_pandas_helpers.py", line 447, in dataframe_to_bq_schema
+    raise ValueError(
+ValueError: bq_schema contains fields not present in dataframe: {'h3_train_pct'}
+[2026-05-28T13:16:44.262+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260528T105032, start_date=20260528T131227, end_date=20260528T131644
+[2026-05-28T13:16:44.284+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 295 for task ml_train_and_predict (bq_schema contains fields not present in dataframe: {'h3_train_pct'}; 25040)
+[2026-05-28T13:16:44.853+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-05-28T13:16:44.891+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

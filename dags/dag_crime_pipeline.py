@@ -65,6 +65,12 @@ CLUSTER_CONFIG = {
             "spark:spark.driver.memory":   "2g",
         },
     },
+    "gce_cluster_config": {                                          # ← THÊM VÀO
+        "service_account": "airflow-crime-sa@sage-mind-489618-n5.iam.gserviceaccount.com",
+        "service_account_scopes": [
+            "https://www.googleapis.com/auth/cloud-platform"
+        ],
+    },
     "initialization_actions": [
         {
             "executable_file":   f"gs://{GCS_BUCKET}/scripts/init_pip.sh",

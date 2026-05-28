@@ -9,6 +9,7 @@ import argparse
 
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import col, to_date, broadcast
+from pyspark.sql.functions import lit, date_format
 
 # ── sys.path bootstrap ─────────────────────────────────────────────────────
 _zip = os.path.join(os.getcwd(), "stage4_gold.zip")
@@ -83,7 +84,7 @@ def write_to_bigquery(
         .option("table", dest)
         .option("temporaryGcsBucket", gcs_temp_bucket)
         .option("partitionField", "date")
-        .option("partitionType", "DAY")
+        .option("partitionType", "MONTH")        # ← đổi DAY thành MONTH
         .option("clusteredFields", "h3_index")
         .option("writeMethod", "indirect")
         .mode(write_mode)
@@ -183,6 +184,16 @@ def main():
         # df_h3_mapping: h3_index → station_id (dùng để resolve station cho mỗi ô H3)
         # df_weather_ready: station_id + weather_date + TMAX/TMIN/PRCP/AWND
         logger.info("Bước 4b: Weather mapping...")
+        if "weather_date" in df_weather_raw.columns:
+            df_weather_raw = df_weather_raw \
+                .withColumn("STATION", lit("USW00094846")) \
+                .withColumn("DATE", date_format(col("weather_date"), "M/d/yyyy")) \
+                .withColumnRenamed("temp_max",      "TMAX") \
+                .withColumnRenamed("temp_min",      "TMIN") \
+                .withColumnRenamed("precipitation", "PRCP") \
+                .withColumnRenamed("wind_speed",    "AWND") \
+                .drop("weather_date", "snow_depth")
+
         df_h3_mapping, df_weather_ready = process_weather_data(df_silver, df_weather_raw, df_stations)
 
         # [FIX-1] JOIN station_id vào crime TRƯỚC khi createOrReplaceTempView

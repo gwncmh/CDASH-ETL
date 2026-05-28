@@ -1,0 +1,28 @@
+[2026-05-28T12:45:35.724+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [queued]>
+[2026-05-28T12:45:35.736+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [queued]>
+[2026-05-28T12:45:35.737+0000] {taskinstance.py:2170} INFO - Starting attempt 4 of 5
+[2026-05-28T12:45:35.752+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-28 10:50:32.435865+00:00
+[2026-05-28T12:45:35.761+0000] {standard_task_runner.py:60} INFO - Started process 24727 to run task
+[2026-05-28T12:45:35.766+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-05-28T10:50:32.435865+00:00', '--job-id', '294', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp7j52637n']
+[2026-05-28T12:45:35.770+0000] {standard_task_runner.py:88} INFO - Job 294: Subtask ml_train_and_predict
+[2026-05-28T12:45:35.850+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-28T10:50:32.435865+00:00 [running]> on host db8b8170dea9
+[2026-05-28T12:45:35.973+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-28T10:50:32.435865+00:00' AIRFLOW_CTX_TRY_NUMBER='4' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-28T10:50:32.435865+00:00'
+[2026-05-28T12:45:36.935+0000] {ml_pipeline.py:1136} INFO - ========================================================================
+[2026-05-28T12:45:36.936+0000] {ml_pipeline.py:1137} INFO -   Chicago Crime Hotspot Forecasting  –  ml_pipeline v11
+[2026-05-28T12:45:36.937+0000] {ml_pipeline.py:1138} INFO -   Target: next_has_crime = (next_total >= 1) | schema OK
+[2026-05-28T12:45:36.938+0000] {ml_pipeline.py:1139} INFO - ========================================================================
+[2026-05-28T12:45:36.990+0000] {ml_pipeline.py:252} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-05-28T12:45:44.471+0000] {ml_pipeline.py:314} INFO - [ML] Loaded 250276 rows, date range: 2025-04-23 → 2026-05-18
+[2026-05-28T12:45:44.472+0000] {ml_pipeline.py:328} INFO - [ML] Aggregating daily per H3...
+[2026-05-28T12:46:02.594+0000] {ml_pipeline.py:399} INFO - [ML] Daily grid: 1,944,443 rows, 4973 H3 cells, 391 dates
+[2026-05-28T12:46:02.763+0000] {ml_pipeline.py:423} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.5
+[2026-05-28T12:46:04.696+0000] {ml_pipeline.py:1175} INFO - [ML] Split  Train: 2025-10-22→2026-04-19 (180 d)  Val: 2026-05-04→2026-05-10  Test: 2026-05-11→2026-05-17
+[2026-05-28T12:46:05.966+0000] {ml_pipeline.py:467} INFO - [ML]   [4A] Own-cell lag/rolling features
+[2026-05-28T12:46:53.086+0000] {ml_pipeline.py:510} INFO - [ML]   [4B] Burst/streak features
+[2026-05-28T12:46:54.832+0000] {ml_pipeline.py:535} INFO - [ML]   [4C] Crime-type composition
+[2026-05-28T12:47:11.009+0000] {ml_pipeline.py:552} INFO - [ML]   [4D] Weather/context features
+[2026-05-28T12:47:15.694+0000] {ml_pipeline.py:567} INFO - [ML]   [4E] Community-level features
+[2026-05-28T12:47:30.827+0000] {ml_pipeline.py:611} INFO - [ML]   [4F] City-level features
+[2026-05-28T12:47:48.137+0000] {ml_pipeline.py:643} INFO - [ML]   [4G] H3 spatial spillover (Routine Activity Theory)
+[2026-05-28T12:48:43.406+0000] {local_task_job_runner.py:234} INFO - Task exited with return code -9
+[2026-05-28T12:48:43.839+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check
