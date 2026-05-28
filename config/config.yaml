@@ -1,0 +1,24 @@
+env: "local" 
+
+local:
+  bronze_path: "./data_sample/bronze/"
+  silver_path: "./data_sample/silver/"
+  gold_path: "./data_sample/gold/"
+  
+  raw_weather_path: "./data_sample/raw/weather/weather.csv"
+  raw_socio_path: "./data_sample/raw/socioeconomic/raw_socioeconomic.csv"
+  raw_pop_path: "./data_sample/raw/socioeconomic/raw_population.csv"
+  raw_weather_station_path: "./data_sample/raw/weather/chicago_stations.csv"
+  raw_poi_path: "./data_sample/raw/socioeconomic/raw_poi.csv"
+
+prod:
+  # Thay 'your-gcs-bucket-name' bằng tên Bucket thực tế của dự án
+  bronze_path: "gs://your-gcs-bucket-name/bronze/"
+  silver_path: "gs://your-gcs-bucket-name/silver/"
+  gold_path: "gs://your-gcs-bucket-name/gold/"
+  
+  raw_weather_path: "gs://your-gcs-bucket-name/raw/weather/weather.csv"
+  raw_socio_path: "gs://your-gcs-bucket-name/raw/socioeconomic/raw_socioeconomic.csv"
+  raw_pop_path: "gs://your-gcs-bucket-name/raw/socioeconomic/raw_population.csv"
+  raw_weather_station_path: "gs://your-gcs-bucket-name/raw/weather/chicago_stations.csv"
+  raw_poi_path: "gs://your-gcs-bucket-name/raw/socioeconomic/raw_poi.csv"

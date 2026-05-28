@@ -2,24 +2,6 @@
 dag_crime_pipeline.py
 =====================
 DAG chính điều phối toàn bộ Crime Analytics Pipeline.
-
-Lịch chạy: Mỗi Chủ Nhật lúc 2:00 SA (UTC+7)
-
-Dependency graph:
-  start
-    ├─► ingest_chicago_crime       (Stage 1: BQ Public Data → GCS)
-    ├─► ingest_weather             (NOAA → BQ dim_weather)
-    ├─► ingest_socioeconomic       (Census ACS API → BQ dim_socioeconomic)
-    ├─► ingest_poi                 (OpenStreetMap → GCS)
-    └─► create_dataproc_cluster
-          └─► etl_bronze           (Stage 2: CSV → Parquet Bronze)
-                └─► etl_silver     (Stage 3: Parquet → clean Silver)
-                      └─► etl_gold (Stage 4: Silver + dim tables → BQ enriched)
-                            └─► delete_dataproc_cluster  (ALL_DONE)
-                                  └─► ml_train_and_predict
-                                        ├─► export_crimes_geojson
-                                        └─► export_forecast_geojson
-                                              └─► end
 """
 
 import sys
@@ -70,28 +52,39 @@ CLUSTER_CONFIG = {
             "spark:spark.driver.memory":   "2g",
         },
     },
+    "initialization_actions": [
+        {
+            "executable_file":   f"gs://{GCS_BUCKET}/scripts/init_pip.sh",
+            "execution_timeout": {"seconds": 300},
+        }
+    ],
 }
 
 # ── PySpark job helper ─────────────────────────────────────────────────────
-def make_pyspark_job(stage_name: str, args: list = None) -> dict:
+def make_pyspark_job(stage_name: str, args: list = None, is_single_file: bool = False) -> dict:
     """
-    stage_name: ví dụ "stage3_silver"
-    GCS layout:
-      scripts/stage3_silver_main.py   ← entry point (.py thô)
-      scripts/stage3_silver.zip       ← chứa src/
-      scripts/utils.zip
+    Build Dataproc PySpark job config.
     """
     base = f"gs://{GCS_BUCKET}/{GCS_SCRIPTS_PATH}"
-
+ 
+    if is_single_file:
+        # Stage 2: file đơn, không có package zip
+        main_uri         = f"{base}/{stage_name}"
+        python_file_uris = [f"{base}/utils.zip"]
+    else:
+        # Stage 3, 4: package có src/ và utils
+        main_uri         = f"{base}/{stage_name}_main.py"
+        python_file_uris = [
+            f"{base}/utils.zip",
+            f"{base}/{stage_name}.zip",
+        ]
+ 
     job = {
         "reference": {"project_id": GCP_PROJECT_ID},
         "placement": {"cluster_name": DATAPROC_CLUSTER_NAME},
         "pyspark_job": {
-            "main_python_file_uri": f"{base}/{stage_name}_main.py",
-            "python_file_uris": [
-                f"{base}/utils.zip",
-                f"{base}/{stage_name}.zip",
-            ],
+            "main_python_file_uri": main_uri,
+            "python_file_uris":     python_file_uris,
             "properties": {
                 "spark.jars.packages": (
                     "com.google.cloud.spark:spark-bigquery-with-dependencies_2.12:0.32.2"
@@ -232,14 +225,16 @@ def _ingest_weather(ds: str, **kwargs):
 def _ingest_socioeconomic(**kwargs):
     """
     US Census ACS API → aggregate lên community area → BQ dim_socioeconomic.
-    Thay thế Chicago Data Portal (hay bị 403).
+
+    Crosswalk GEOID10 → COMMAREA được đọc từ GCS (file tĩnh, upload 1 lần từ Colab).
+    Không phụ thuộc Chicago Data Portal (hay bị 403).
     """
+    import io
     import requests
     import pandas as pd
-    from google.cloud import bigquery
+    from google.cloud import bigquery, storage
 
     CENSUS_API_KEY = "2763ffff55c7e1e1f93de60ee214acfd706926d0"
-    HEADERS        = {"X-App-Token": "r9vE8urT836pTMTzEA1gn8xd0"}
 
     VARS = [
         "NAME",
@@ -247,61 +242,50 @@ def _ingest_socioeconomic(**kwargs):
         "B19013_001E",   # median household income
         "B23025_002E",   # labor force
         "B23025_005E",   # unemployed
-        "B15003_001E",   # pop 25+ (education denom)
-        "B15003_017E",   # HS diploma (dùng làm proxy hs_plus sau khi sum)
         "B17001_001E",   # poverty denom
         "B17001_002E",   # poverty count
     ]
 
-    def fetch_acs(year: int) -> pd.DataFrame:
-        url = (
-            f"https://api.census.gov/data/{year}/acs/acs5"
-            f"?get={','.join(VARS)}"
-            f"&for=tract:*"
-            f"&in=state:17%20county:031"   # Illinois, Cook County
-            f"&key={CENSUS_API_KEY}"
-        )
-        resp = requests.get(url, timeout=60)
-        resp.raise_for_status()
-        data = resp.json()
-        df = pd.DataFrame(data[1:], columns=data[0])
-        num_cols = [c for c in df.columns if c not in ("NAME", "state", "county", "tract")]
-        for c in num_cols:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-        df["tract"]   = df["tract"].str.zfill(6)
-        df["GEOID10"] = "17031" + df["tract"]
-        return df
+    # ── 1. Đọc crosswalk từ GCS ────────────────────────────────────────────
+    print("[ingest_socioeconomic] Đọc crosswalk từ GCS...")
+    gcs    = storage.Client(project=GCP_PROJECT_ID)
+    blob   = gcs.bucket(GCS_BUCKET).blob("raw/crosswalk/tract_to_ca.csv")
+    xwalk  = pd.read_csv(io.BytesIO(blob.download_as_bytes()))
 
-    # Lấy năm ACS gần nhất
-    raw_acs = fetch_acs(2023)
-    print(f"[ingest_socioeconomic] ACS 2023: {len(raw_acs)} tracts")
-
-    # Crosswalk tract → community area (Chicago Data Portal, endpoint JSON ổn định hơn CSV)
-    xwalk_resp = requests.get(
-        "https://data.cityofchicago.org/api/v3/views/74p9-q2aq/query.json",
-        headers=HEADERS, timeout=30,
-    )
-    xwalk_resp.raise_for_status()
-    xwalk = pd.DataFrame(xwalk_resp.json())
-    xwalk.columns = xwalk.columns.str.upper()
-    xwalk = xwalk[["GEOID10", "COMMAREA"]].copy()
+    # Chỉ giữ 2 cột cần thiết, chuẩn hóa kiểu
     xwalk["GEOID10"]  = xwalk["GEOID10"].astype(str).str.strip()
     xwalk["COMMAREA"] = pd.to_numeric(xwalk["COMMAREA"], errors="coerce")
-    xwalk = xwalk.dropna(subset=["COMMAREA"])
+    xwalk = xwalk[["GEOID10", "COMMAREA"]].dropna()
+    xwalk["COMMAREA"] = xwalk["COMMAREA"].astype(int)
+    print(f"[ingest_socioeconomic] Crosswalk: {xwalk['COMMAREA'].nunique()}/77 community areas, {len(xwalk)} tracts")
 
-    n_ca = xwalk["COMMAREA"].nunique()
-    if n_ca != 77:
-        print(f"[ingest_socioeconomic] WARNING: crosswalk có {n_ca} community areas, kỳ vọng 77")
-    else:
-        print("[ingest_socioeconomic] Crosswalk: ✅ đủ 77 community areas")
+    # ── 2. Fetch ACS 2023 từ Census API ───────────────────────────────────
+    print("[ingest_socioeconomic] Fetch ACS 2023...")
+    url = (
+        f"https://api.census.gov/data/2023/acs/acs5"
+        f"?get={','.join(VARS)}"
+        f"&for=tract:*"
+        f"&in=state:17%20county:031"
+        f"&key={CENSUS_API_KEY}"
+    )
+    resp = requests.get(url, timeout=60)
+    resp.raise_for_status()
+    data    = resp.json()
+    raw_acs = pd.DataFrame(data[1:], columns=data[0])
 
-    # JOIN tract → community area
-    raw_acs = raw_acs.merge(xwalk, on="GEOID10", how="left")
-    raw_acs = raw_acs.dropna(subset=["COMMAREA"])
-    raw_acs["COMMAREA"] = raw_acs["COMMAREA"].astype(int)
-    print(f"[ingest_socioeconomic] Sau lọc Chicago: {len(raw_acs)} tracts")
+    # Ép kiểu số
+    for c in VARS[1:]:   # bỏ "NAME"
+        raw_acs[c] = pd.to_numeric(raw_acs[c], errors="coerce")
 
-    # Aggregate lên community area
+    # Tạo GEOID10 khớp với crosswalk: "17031" + tract 6 chữ số
+    raw_acs["GEOID10"] = "17031" + raw_acs["tract"].str.zfill(6)
+    print(f"[ingest_socioeconomic] ACS 2023: {len(raw_acs)} tracts")
+
+    # ── 3. Join crosswalk ─────────────────────────────────────────────────
+    raw_acs = raw_acs.merge(xwalk, on="GEOID10", how="inner")
+    print(f"[ingest_socioeconomic] Sau join: {len(raw_acs)} tracts / {raw_acs['COMMAREA'].nunique()} CA")
+
+    # ── 4. Aggregate lên community area ───────────────────────────────────
     agg = raw_acs.groupby("COMMAREA").agg(
         population    = ("B01003_001E", "sum"),
         income_sum    = ("B19013_001E", "sum"),
@@ -314,17 +298,13 @@ def _ingest_socioeconomic(**kwargs):
     agg["unemployment_rate"] = (agg["unemployed"] / agg["labor_force"] * 100).round(2)
     agg["per_capita_income"] = (agg["income_sum"] / agg["population"]).round(0)
     agg["poverty_rate"]      = (agg["poverty_count"] / agg["poverty_denom"] * 100).round(2)
-    # hardship_index: dùng poverty_rate làm proxy (không có sẵn từ ACS trực tiếp)
     agg["hardship_index"]    = agg["poverty_rate"].round(0).astype("Int64")
 
     df_final = agg.rename(columns={
         "COMMAREA":   "community_area",
         "population": "population_density",
-    })[[
-        "community_area", "per_capita_income",
-        "unemployment_rate", "hardship_index", "population_density",
-    ]]
-    # community_area_name: để trống vì không có trong ACS (tĩnh, có thể bổ sung sau)
+    })[["community_area", "per_capita_income", "unemployment_rate",
+        "hardship_index", "population_density"]]
     df_final["community_area_name"] = ""
     df_final = df_final[[
         "community_area", "community_area_name",
@@ -332,6 +312,7 @@ def _ingest_socioeconomic(**kwargs):
         "hardship_index", "population_density",
     ]]
 
+    # ── 5. Ghi lên BigQuery ───────────────────────────────────────────────
     client   = bigquery.Client(project=GCP_PROJECT_ID)
     table_id = f"{GCP_PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE_SOCIOECONOMIC}"
     job_cfg  = bigquery.LoadJobConfig(
@@ -404,7 +385,9 @@ def _ingest_poi(**kwargs):
 
 
 def _run_ml_pipeline(project_id, dataset, enriched_table, predictions_table, **kwargs):
-    from ml.ml_pipeline import train_and_predict
+    import sys, os
+    sys.path.insert(0, "/opt/airflow/scripts/ml")
+    from ml_pipeline import train_and_predict
 
     result = train_and_predict(
         project_id=project_id,
@@ -509,6 +492,7 @@ with DAG(
         task_id="etl_bronze",
         job=make_pyspark_job(
             "stage2_bronze/data_ingestion.py",
+            is_single_file=True,                  # ← thêm flag này
             args=[
                 "--env=prod",
                 f"--raw_path=gs://{GCS_BUCKET}/raw/chicago_crime/*/*/*/data.csv",
@@ -526,7 +510,11 @@ with DAG(
         task_id="etl_silver",
         job=make_pyspark_job(
             "stage3_silver",
-            args=[f"--project={GCP_PROJECT_ID}"],
+            args=[
+                f"--project={GCP_PROJECT_ID}",
+                f"--bronze_path=gs://{GCS_BUCKET}/bronze/chicago_crime",
+                f"--silver_path=gs://{GCS_BUCKET}/silver/chicago_crime",
+            ],
         ),
         region=GCP_REGION,
         project_id=GCP_PROJECT_ID,
