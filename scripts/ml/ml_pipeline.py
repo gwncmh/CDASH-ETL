@@ -1,8 +1,8 @@
 """
-ml_pipeline.py  –  Crime Hotspot Forecasting v11
+ml_pipeline.py  –  Crime Hotspot Forecasting v13 dynamic-spatial
 =================================================
 Airflow PythonOperator callable.
-Đọc enriched_crime_data từ BigQuery → Feature Engineering v11 →
+Đọc enriched_crime_data từ BigQuery → Feature Engineering v13 →
 Train XGBoost → Ghi prediction_results về BigQuery.
 
 Cải tiến v11 (so với v1):
@@ -39,10 +39,10 @@ log = logging.getLogger("ML_Pipeline_v11")
 # 0.  CONSTANTS & CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-MODEL_VERSION_PREFIX = "crime_prob_v11"
+MODEL_VERSION_PREFIX = "crime_prob_v13_dynamic_spatial"
 
 # Rolling split windows (ngày)
-TRAIN_DAYS       = 180
+TRAIN_DAYS       = 220
 CALIB_DAYS       = 14
 VAL_DAYS         = 7
 TEST_DAYS        = 7
@@ -52,16 +52,16 @@ RANDOM_STATE = 42
 
 # XGBoost hyperparameters (đã tune cho bài toán binary hotspot)
 XGB_PARAMS = dict(
-    n_estimators          = 3000,
-    learning_rate         = 0.018,
-    max_depth             = 5,
-    min_child_weight      = 10,
+    n_estimators          = 2500,
+    learning_rate         = 0.020,
+    max_depth             = 4,
+    min_child_weight      = 20,
     subsample             = 0.85,
     colsample_bytree      = 0.65,
     colsample_bylevel     = 0.75,
     colsample_bynode      = 0.85,
-    reg_alpha             = 0.40,
-    reg_lambda            = 5.0,
+    reg_alpha             = 0.60,
+    reg_lambda            = 8.0,
     objective             = "binary:logistic",
     eval_metric           = "aucpr",
     tree_method           = "hist",
@@ -71,6 +71,15 @@ XGB_PARAMS = dict(
 )
 
 THRESHOLD_GRID = np.arange(0.05, 0.65, 0.01).tolist()
+
+# v13 experiment controls
+RECENT_DAYS_TO_KEEP = 320
+FLOAT_POLICY = "float32"
+POS_WEIGHT_POWER = 0.75
+USE_PRED_RATE_GUARD = True
+MAX_PRED_RATE_MULTIPLIER = 2.00
+DROP_REDUNDANT_PRIOR_FEATURES = True
+DROP_STRONG_RAW_PRIORS = True
 
 # Ngày lễ Chicago ảnh hưởng đến tội phạm (Routine Activity Theory)
 _HOLIDAYS_RAW = [
@@ -115,10 +124,13 @@ BQ_PREDICTION_SCHEMA = [
     bigquery.SchemaField("hardship_index",    "FLOAT"),
     bigquery.SchemaField("unemployment_rate", "FLOAT"),
     bigquery.SchemaField("population_density","FLOAT"),
+    bigquery.SchemaField("h3_train_pct",      "FLOAT"),
+    bigquery.SchemaField("h3_train_active_rate", "FLOAT"),
     bigquery.SchemaField("roll_mean_7",       "FLOAT"),
     bigquery.SchemaField("roll_mean_30",      "FLOAT"),
     bigquery.SchemaField("zero_streak",       "FLOAT"),
     bigquery.SchemaField("nbr_r1_mean",       "FLOAT"),
+    bigquery.SchemaField("nbr_r1_active_rate", "FLOAT"),
     bigquery.SchemaField("near_repeat_3d",    "FLOAT"),
     bigquery.SchemaField("arrest_rate_7",     "FLOAT"),
     bigquery.SchemaField("is_holiday",        "FLOAT"),
@@ -135,15 +147,16 @@ def safe_ratio(
     default: float = 0.0,
     clip: Optional[float] = None,
 ) -> np.ndarray:
-    num = np.asarray(num, dtype=float)
-    den = np.asarray(den, dtype=float)
-    out = np.full_like(num, default, dtype=float)
-    mask = np.abs(den) > 1e-12
+    """RAM-safe ratio for tree models. float32 is enough for XGBoost hist."""
+    dtype = np.float32 if FLOAT_POLICY == "float32" else np.float64
+    num = np.asarray(num, dtype=dtype)
+    den = np.asarray(den, dtype=dtype)
+    out = np.full(num.shape, default, dtype=dtype)
+    mask = np.abs(den) > dtype(1e-12)
     out[mask] = num[mask] / den[mask]
     if clip is not None:
-        out = np.clip(out, -clip, clip)
-    return out
-
+        out = np.clip(out, -clip, clip).astype(dtype)
+    return out.astype(dtype, copy=False)
 
 def add_cyclical_date_features(df: pd.DataFrame, date_col: str = "date") -> pd.DataFrame:
     df = df.copy()
@@ -193,16 +206,17 @@ def sanitize_numeric(
     cols: list[str],
     medians: Optional[pd.Series] = None,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    x = df.copy()
+    """Select only feature columns to avoid copying the whole large dataframe."""
+    x = df.loc[:, cols].copy()
     for c in cols:
         if c not in x.columns:
             x[c] = 0.0
         x[c] = pd.to_numeric(x[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
     if medians is None:
-        medians = x[cols].median(numeric_only=True).fillna(0.0)
-    x[cols] = x[cols].fillna(medians).fillna(0.0)
-    return x[cols], medians
-
+        medians = x.median(numeric_only=True).fillna(0.0)
+    x = x.fillna(medians).fillna(0.0)
+    dtype = np.float32 if FLOAT_POLICY == "float32" else np.float64
+    return x.astype(dtype), medians.astype(dtype)
 
 def find_best_threshold(
     y_true: np.ndarray,
@@ -233,6 +247,60 @@ def model_version_str() -> str:
     return pd.Timestamp.now().strftime("%Y-%m-%d") + f".{MODEL_VERSION_PREFIX}"
 
 
+def reduce_mem_usage(
+    df: pd.DataFrame,
+    exclude: tuple[str, ...] = ("h3_index", "date", "primary_type"),
+) -> pd.DataFrame:
+    """Downcast numeric columns to keep Airflow/Kaggle memory stable."""
+    for c in df.columns:
+        if c in exclude:
+            continue
+        if pd.api.types.is_float_dtype(df[c]):
+            if FLOAT_POLICY == "float32":
+                df[c] = pd.to_numeric(df[c], downcast="float")
+            else:
+                df[c] = df[c].astype("float64", copy=False)
+        elif pd.api.types.is_integer_dtype(df[c]):
+            df[c] = pd.to_numeric(df[c], downcast="integer")
+    gc.collect()
+    return df
+
+
+def find_best_threshold_guarded(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    grid: list[float] = THRESHOLD_GRID,
+    max_multiplier: float = MAX_PRED_RATE_MULTIPLIER,
+) -> tuple[float, float, pd.DataFrame]:
+    """Optimize F1 while penalizing thresholds that predict too many hotspots."""
+    from sklearn.metrics import f1_score
+    base_rate = float(np.mean(y_true))
+    max_pred_rate = min(0.95, max_multiplier * base_rate)
+    rows = []
+    best_t, best_score, best_f1 = 0.5, -1.0, 0.0
+    for t in grid:
+        pred = (y_prob >= t).astype(int)
+        pred_rate = float(pred.mean())
+        f = f1_score(y_true, pred, zero_division=0)
+        penalty = max(0.0, pred_rate - max_pred_rate) * 0.35
+        score = f - penalty
+        rows.append((t, f, pred_rate, score))
+        if score > best_score:
+            best_t, best_score, best_f1 = t, score, f
+    return best_t, best_f1, pd.DataFrame(
+        rows, columns=["threshold", "f1", "pred_rate", "guarded_score"]
+    )
+
+
+def h3_grid_disk_compat(h3lib, cell: str, k: int):
+    """Compatible with h3 v3/v4."""
+    if hasattr(h3lib, "grid_disk"):
+        return h3lib.grid_disk(cell, k)
+    if hasattr(h3lib, "k_ring"):
+        return h3lib.k_ring(cell, k)
+    raise AttributeError("h3 library has neither grid_disk nor k_ring")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 2.  DATA LOADING FROM BIGQUERY
 # ─────────────────────────────────────────────────────────────────────────────
@@ -242,7 +310,7 @@ def load_enriched_data(
     project_id: str,
     dataset: str,
     enriched_table: str,
-    lookback_days: int = 400,
+    lookback_days: int = RECENT_DAYS_TO_KEEP,
 ) -> pd.DataFrame:
     """
     Kéo enriched_crime_data từ BigQuery.
@@ -395,7 +463,8 @@ def aggregate_daily(df_raw: pd.DataFrame) -> pd.DataFrame:
     daily["theft_ratio_day"]     = safe_ratio(daily["is_theft"],     daily["total_crimes"], clip=1)
     daily["narcotics_ratio_day"] = safe_ratio(daily["is_narcotics"], daily["total_crimes"], clip=1)
 
-    log.info("[ML] Daily grid: %s rows, %d H3 cells, %d dates",
+    daily = reduce_mem_usage(daily)
+    log.info("[ML] Daily grid: %s rows, %d H3 cells, %d dates | RAM-safe downcast done",
              f"{len(daily):,}", len(all_h3), len(all_dates))
     return daily, all_h3
 
@@ -414,8 +483,8 @@ def build_neighbor_maps(all_h3: np.ndarray) -> tuple[dict, dict, bool]:
         all_h3_set = set(all_h3)
         nbr_r1, nbr_r2 = {}, {}
         for cell in all_h3:
-            disk1 = set(h3lib.grid_disk(cell, 1))
-            disk2 = set(h3lib.grid_disk(cell, 2))
+            disk1 = set(h3_grid_disk_compat(h3lib, cell, 1))
+            disk2 = set(h3_grid_disk_compat(h3lib, cell, 2))
             nbr_r1[cell] = list((disk1 - {cell}) & all_h3_set)
             nbr_r2[cell] = list((disk2 - disk1)  & all_h3_set)
         avg_r1 = np.mean([len(v) for v in nbr_r1.values()])
@@ -440,7 +509,7 @@ def build_features(
     train_dates: list,
 ) -> pd.DataFrame:
     """
-    Feature engineering v11 – RAM-optimised rewrite.
+    Feature engineering v13 – RAM-optimised rewrite.
 
     Thay đổi so với bản gốc:
       - float32 thay float64 cho mọi cột số mới tạo ra (giảm ~50% RAM)
@@ -639,131 +708,151 @@ def build_features(
     gc.collect()
 
     # ── 4G  Spatial Spillover (H3 neighbors) ─────────────────────────────
-    # RAM-OPTIMISED: dùng float32, tính từng loại nbr rồi xoá ngay,
-    # không giữ 5 ma trận (n_h3 × n_dates) cùng lúc trong bộ nhớ.
-    log.info("[ML]   [4G] H3 spatial spillover (Routine Activity Theory)")
+    log.info("[ML]   [4G] H3 spatial spillover v13 dynamic-spatial")
     if has_h3:
-        # --- Pivot với float32 để tiết kiệm 50% RAM so với float64 ---
-        pivot_src = daily[["date", "h3_index", "total_crimes", "crime_today"]].copy()
-        pivot_src["total_crimes"] = pivot_src["total_crimes"].astype("float32")
-        pivot_src["crime_today"]  = pivot_src["crime_today"].astype("float32")
+        dates_order = pd.Index(sorted(daily["date"].unique()))
+        cells_order = pd.Index(sorted(daily["h3_index"].unique()))
+        n_dates, n_cells = len(dates_order), len(cells_order)
+        cell_to_pos = {c: i for i, c in enumerate(cells_order)}
 
-        crime_pivot  = pivot_src.pivot_table(
-            index="date", columns="h3_index", values="total_crimes", fill_value=0
-        ).astype("float32")
-        active_pivot = pivot_src.pivot_table(
-            index="date", columns="h3_index", values="crime_today", fill_value=0
-        ).astype("float32")
-        del pivot_src
-        gc.collect()
-
-        h3_cols    = crime_pivot.columns.tolist()
-        date_index = crime_pivot.index
-
-        def _build_nbr_matrix(src_pivot: pd.DataFrame, nbr_map: dict, agg: str) -> pd.DataFrame:
-            """
-            Tính ma trận neighbour (n_dates × n_h3) theo agg = mean/sum/max.
-            Dùng numpy để tránh overhead của pandas, trả về float32.
-            """
-            h3_pos = {cell: i for i, cell in enumerate(h3_cols)}
-            src_np = src_pivot.values  # shape: (n_dates, n_h3), float32
-
-            out_np = np.zeros_like(src_np, dtype="float32")
-            for i, cell in enumerate(h3_cols):
-                nbrs = [h3_pos[n] for n in nbr_map.get(cell, []) if n in h3_pos]
-                if not nbrs:
-                    continue
-                nbr_vals = src_np[:, nbrs]   # (n_dates, k)
-                if agg == "mean":
-                    out_np[:, i] = nbr_vals.mean(axis=1)
-                elif agg == "sum":
-                    out_np[:, i] = nbr_vals.sum(axis=1)
-                elif agg == "max":
-                    out_np[:, i] = nbr_vals.max(axis=1)
-
-            return pd.DataFrame(out_np, index=date_index, columns=h3_cols)
-
-        def _lag_melt(piv: pd.DataFrame, col_name: str) -> pd.DataFrame:
-            """shift(1) → melt → float32, xoá pivot ngay sau khi dùng."""
-            melted = (
-                piv.shift(1)
-                .reset_index()
-                .melt(id_vars="date", var_name="h3_index", value_name=col_name)
-            )
-            melted[col_name] = melted[col_name].astype("float32")
-            return melted
-
-        # Tính từng loại nbr, melt ngay, xoá ma trận lớn trước khi tính cái tiếp theo
-        log.info("[ML]     [4G] computing nbr_r1_mean ...")
-        nbr_r1_mean_d = _build_nbr_matrix(crime_pivot, nbr_r1, "mean")
-        nbr_merged    = _lag_melt(nbr_r1_mean_d, "nbr_r1_mean")
-
-        # nbr_r1_roll7 cần nbr_r1_mean_d → tính luôn trước khi xoá
-        log.info("[ML]     [4G] computing nbr_r1_roll7 ...")
-        nbr_roll7_melt = (
-            nbr_r1_mean_d.shift(1).rolling(7, min_periods=2).mean()
-            .reset_index()
-            .melt(id_vars="date", var_name="h3_index", value_name="nbr_r1_roll7")
+        crime_pivot = (
+            daily.pivot(index="date", columns="h3_index", values="total_crimes")
+            .reindex(index=dates_order, columns=cells_order)
+            .fillna(0).astype("float32")
         )
-        nbr_roll7_melt["nbr_r1_roll7"] = nbr_roll7_melt["nbr_r1_roll7"].astype("float32")
-        del nbr_r1_mean_d
+        active_pivot = (
+            daily.pivot(index="date", columns="h3_index", values="crime_today")
+            .reindex(index=dates_order, columns=cells_order)
+            .fillna(0).astype("float32")
+        )
+        crime_arr = np.ascontiguousarray(crime_pivot.to_numpy(dtype=np.float32))
+        active_arr = np.ascontiguousarray(active_pivot.to_numpy(dtype=np.float32))
+        del crime_pivot, active_pivot
         gc.collect()
 
-        log.info("[ML]     [4G] computing nbr_r1_sum ...")
-        nbr_r1_sum_d = _build_nbr_matrix(crime_pivot, nbr_r1, "sum")
-        nd = _lag_melt(nbr_r1_sum_d, "nbr_r1_sum")
-        nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
-        del nbr_r1_sum_d, nd
-        gc.collect()
+        r1_idx = [[cell_to_pos[x] for x in nbr_r1.get(cell, []) if x in cell_to_pos] for cell in cells_order]
+        r2_idx = [[cell_to_pos[x] for x in nbr_r2.get(cell, []) if x in cell_to_pos] for cell in cells_order]
 
-        log.info("[ML]     [4G] computing nbr_r1_max ...")
-        nbr_r1_max_d = _build_nbr_matrix(crime_pivot, nbr_r1, "max")
-        nd = _lag_melt(nbr_r1_max_d, "nbr_r1_max")
-        nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
-        del nbr_r1_max_d, nd
-        gc.collect()
+        # Column-major reshape below matches h3 repeated outer / dates tiled inner.
+        nbr_long = pd.DataFrame({
+            "date": np.tile(dates_order.values, n_cells),
+            "h3_index": np.repeat(cells_order.values.astype(str), n_dates),
+        })
 
-        log.info("[ML]     [4G] computing nbr_r1_active_rate ...")
-        nbr_r1_active_d = _build_nbr_matrix(active_pivot, nbr_r1, "mean")
-        nd = _lag_melt(nbr_r1_active_d, "nbr_r1_active_rate")
-        nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
-        del nbr_r1_active_d, nd, active_pivot
-        gc.collect()
+        def lag1_matrix(mat: np.ndarray) -> np.ndarray:
+            out = np.zeros_like(mat, dtype=np.float32)
+            out[1:, :] = mat[:-1, :]
+            return out
 
-        log.info("[ML]     [4G] computing nbr_r2_mean ...")
-        nbr_r2_mean_d = _build_nbr_matrix(crime_pivot, nbr_r2, "mean")
-        nd = _lag_melt(nbr_r2_mean_d, "nbr_r2_mean")
-        nbr_merged = nbr_merged.merge(nd, on=["date", "h3_index"], how="left")
-        del nbr_r2_mean_d, nd, crime_pivot
-        gc.collect()
+        def add_neighbor_feature(name: str, source_arr: np.ndarray, ring_idx: list[list[int]], stat: str):
+            mat = np.zeros((n_dates, n_cells), dtype=np.float32)
+            for j, idxs in enumerate(ring_idx):
+                if not idxs:
+                    continue
+                sub = source_arr[:, idxs]
+                if stat == "mean":
+                    mat[:, j] = sub.mean(axis=1, dtype=np.float32)
+                elif stat == "sum":
+                    mat[:, j] = sub.sum(axis=1, dtype=np.float32)
+                elif stat == "max":
+                    mat[:, j] = sub.max(axis=1)
+                elif stat == "std":
+                    mat[:, j] = sub.std(axis=1, dtype=np.float32)
+                else:
+                    raise ValueError(stat)
 
-        # Gắn nbr_roll7
-        nbr_merged = nbr_merged.merge(nbr_roll7_melt, on=["date", "h3_index"], how="left")
-        del nbr_roll7_melt
-        gc.collect()
+            if name == "nbr_r1_roll7":
+                shifted = lag1_matrix(mat)
+                feat = (
+                    pd.DataFrame(shifted, index=dates_order, columns=cells_order)
+                    .rolling(7, min_periods=2)
+                    .mean().fillna(0).to_numpy(dtype=np.float32)
+                )
+                del shifted
+            else:
+                feat = lag1_matrix(mat)
 
-        # Merge vào df chính
-        df = df.merge(nbr_merged, on=["date", "h3_index"], how="left")
-        del nbr_merged
-        gc.collect()
+            nbr_long[name] = feat.reshape(-1, order="F").astype(np.float32)
+            del mat, feat
+            gc.collect()
 
-        for c in ["nbr_r1_mean", "nbr_r1_sum", "nbr_r1_max",
-                  "nbr_r1_active_rate", "nbr_r2_mean", "nbr_r1_roll7"]:
+        log.info("[ML]     computing nbr_r1 mean/sum/max/std/active-count + r2 + roll7 ...")
+        add_neighbor_feature("nbr_r1_mean", crime_arr, r1_idx, "mean")
+        add_neighbor_feature("nbr_r1_sum",  crime_arr, r1_idx, "sum")
+        add_neighbor_feature("nbr_r1_max",  crime_arr, r1_idx, "max")
+        add_neighbor_feature("nbr_r1_std",  crime_arr, r1_idx, "std")
+        add_neighbor_feature("nbr_r1_active_rate", active_arr, r1_idx, "mean")
+        add_neighbor_feature("nbr_r1_active_count", active_arr, r1_idx, "sum")
+        add_neighbor_feature("nbr_r1_any_active", active_arr, r1_idx, "max")
+        add_neighbor_feature("nbr_r2_mean", crime_arr, r2_idx, "mean")
+        add_neighbor_feature("nbr_r1_roll7", crime_arr, r1_idx, "mean")
+
+        df = df.merge(nbr_long, on=["date", "h3_index"], how="left")
+        base_nbr_cols = [
+            "nbr_r1_mean", "nbr_r1_sum", "nbr_r1_max", "nbr_r1_std",
+            "nbr_r1_active_rate", "nbr_r1_active_count", "nbr_r1_any_active",
+            "nbr_r2_mean", "nbr_r1_roll7",
+        ]
+        for c in base_nbr_cols:
             df[c] = df[c].fillna(0).astype("float32")
 
-        df["h3_vs_nbr_r1"]  = safe_ratio(
+        df["h3_vs_nbr_r1"] = safe_ratio(
             df["roll_mean_7"], df["nbr_r1_mean"] + 1e-3, default=0, clip=20
         ).astype("float32")
-        df["h3_above_nbr"]  = (df["lag_1"] > df["nbr_r1_mean"]).astype("int8")
+        df["h3_above_nbr"] = (df["lag_1"] > df["nbr_r1_mean"]).astype("int8")
         df["nbr_contagion"] = (df["nbr_r1_active_rate"] > 0.5).astype("int8")
+        df["nbr_r1_burst_1_7"] = safe_ratio(
+            df["nbr_r1_mean"], df["nbr_r1_roll7"] + 1e-3, default=0, clip=10
+        ).astype("float32")
+        df["h3_nbr_joint_activity"] = (
+            df["active_rate_7"].fillna(0).astype("float32") * df["nbr_r1_active_rate"]
+        ).astype("float32")
+        df["nbr_r1_vs_r2"] = safe_ratio(
+            df["nbr_r1_mean"], df["nbr_r2_mean"] + 1e-3, default=0, clip=10
+        ).astype("float32")
 
-        log.info("[ML]     ✓ Spatial spillover features added")
+        sg = df.groupby("h3_index", group_keys=False)
+        df["nbr_r1_active_roll7"] = (
+            sg["nbr_r1_active_rate"].transform(lambda s: s.rolling(7, min_periods=2).mean())
+            .fillna(0).astype("float32")
+        )
+        df["nbr_r1_active_burst"] = safe_ratio(
+            df["nbr_r1_active_rate"], df["nbr_r1_active_roll7"] + 1e-3, default=0, clip=10
+        ).astype("float32")
+        df["nbr_r1_new_activation"] = (
+            (df["nbr_r1_active_rate"] > 0) &
+            (sg["nbr_r1_active_rate"].shift(1).fillna(0) <= 0)
+        ).astype("int8")
+        df["nbr_r1_hot_count_x_local_cold"] = (
+            df["nbr_r1_active_count"].fillna(0).astype("float32") *
+            (df["lag_1"].fillna(0) <= 0).astype("float32")
+        ).astype("float32")
+        df["nbr_max_vs_local_lag1"] = safe_ratio(
+            df["nbr_r1_max"], df["lag_1"].fillna(0) + 1e-3, default=0, clip=20
+        ).astype("float32")
+        df["nbr_dispersion_signal"] = safe_ratio(
+            df["nbr_r1_std"], df["nbr_r1_mean"] + 1e-3, default=0, clip=10
+        ).astype("float32")
+        df["local_nbr_double_burst"] = (
+            df["burst_3_30"].fillna(0).clip(0, 10).astype("float32") *
+            df["nbr_r1_burst_1_7"].fillna(0).clip(0, 10).astype("float32")
+        ).astype("float32")
+
+        del nbr_long, crime_arr, active_arr, r1_idx, r2_idx
+        gc.collect()
+        log.info("[ML]     ✓ Spatial spillover features added, single-merge RAM-safe")
     else:
-        for c in ["nbr_r1_mean", "nbr_r1_sum", "nbr_r1_max",
-                  "nbr_r1_active_rate", "nbr_r2_mean", "nbr_r1_roll7",
-                  "h3_vs_nbr_r1", "h3_above_nbr", "nbr_contagion"]:
+        for c in [
+            "nbr_r1_mean", "nbr_r1_sum", "nbr_r1_max", "nbr_r1_std",
+            "nbr_r1_active_rate", "nbr_r1_active_count", "nbr_r1_any_active",
+            "nbr_r2_mean", "nbr_r1_roll7", "h3_vs_nbr_r1", "h3_above_nbr",
+            "nbr_contagion", "nbr_r1_burst_1_7", "h3_nbr_joint_activity",
+            "nbr_r1_vs_r2", "nbr_r1_active_roll7", "nbr_r1_active_burst",
+            "nbr_r1_new_activation", "nbr_r1_hot_count_x_local_cold",
+            "nbr_max_vs_local_lag1", "nbr_dispersion_signal", "local_nbr_double_burst",
+        ]:
             df[c] = np.float32(0)
-        log.warning("[ML]     ⚠️  Spatial spillover skipped (h3 not installed)")
+        log.warning("[ML]     ⚠️ Spatial spillover skipped (h3 not installed)")
 
     # ── 4H  Train-only spatial priors ─────────────────────────────────────
     log.info("[ML]   [4H] Train-only spatial priors")
@@ -812,6 +901,8 @@ def build_features(
     ]:
         if c in df.columns:
             df[c] = df[c].fillna(0).astype("float32")
+
+    df["h3_train_pct"] = df["h3_train_percentile"].astype("float32")
 
     # ── 4I  Near-Repeat Victimization ─────────────────────────────────────
     log.info("[ML]   [4I] Near-repeat victimization (Near-Repeat Theory)")
@@ -967,8 +1058,8 @@ def train_model(
     test_dates:  list,
 ) -> tuple:
     """
-    Train XGBoost, calibrate threshold, evaluate.
-    Returns: (model, feature_cols, train_medians, best_threshold, val_res, test_res)
+    Train XGBoost v13, calibrate threshold with predicted-rate guard, evaluate.
+    Returns: (model, feature_cols, train_medians, best_threshold, val_res, test_res, scale_pos_weight)
     """
     import xgboost as xgb
     from sklearn.metrics import (
@@ -978,9 +1069,9 @@ def train_model(
 
     log.info("[ML] Preparing train/calib/val/test splits...")
 
-    ID_COLS     = {"h3_index", "date"}
+    ID_COLS = {"h3_index", "date"}
     TARGET_COLS = {"next_total", "next_has_crime"}
-    exclude     = ID_COLS | TARGET_COLS
+    exclude = ID_COLS | TARGET_COLS
 
     feature_cols = [
         c for c in df.columns
@@ -995,12 +1086,30 @@ def train_model(
     val_mask   = df["date"].isin(val_dates)   & supervised
     test_mask  = df["date"].isin(test_dates)  & supervised
 
-    # Drop constant / all-null features
+    # v13: remove redundant/raw priors that dominated v11/v12 and caused hotspot memorization.
+    redundant_priors = {
+        "h3_train_sum", "h3_train_max", "h3_train_pct",
+        "comm_train_sum", "comm_train_max",
+    }
+    strong_raw_priors = {"h3_train_mean", "h3_train_std", "comm_train_mean", "comm_train_std"}
+    removed = set()
+    if DROP_REDUNDANT_PRIOR_FEATURES:
+        removed |= redundant_priors
+    if DROP_STRONG_RAW_PRIORS:
+        removed |= strong_raw_priors
+    feature_cols = [c for c in feature_cols if c not in removed]
+    if removed:
+        log.info("[ML] Prior de-dup/damping: removed %d prior feature(s)", len(removed))
+
+    # Drop constant / all-null features based on train only.
     keep = []
+    dropped = []
     for c in feature_cols:
         s = pd.to_numeric(df.loc[train_mask, c], errors="coerce")
         if s.notna().sum() > 0 and s.nunique(dropna=True) > 1:
             keep.append(c)
+        else:
+            dropped.append(c)
     feature_cols = keep
 
     X_train, train_medians = sanitize_numeric(df.loc[train_mask], feature_cols)
@@ -1015,7 +1124,8 @@ def train_model(
 
     neg = int((y_train == 0).sum())
     pos = int((y_train == 1).sum())
-    scale_pos_weight = neg / max(pos, 1)
+    raw_scale_pos_weight = neg / max(pos, 1)
+    scale_pos_weight = raw_scale_pos_weight ** POS_WEIGHT_POWER
 
     near_repeat = (
         df.loc[train_mask, "near_repeat_3d"].fillna(0).values
@@ -1026,12 +1136,16 @@ def train_model(
         y_train == 1,
         1.0 + 0.3 * next_total_train + 0.2 * near_repeat,
         1.0,
-    )
+    ).astype(np.float32)
 
     log.info("[ML] Train=%d  Calib=%d  Val=%d  Test=%d  features=%d",
              len(X_train), len(X_calib), len(X_val), len(X_test), len(feature_cols))
-    log.info("[ML] Positive rate train=%.2f%%  scale_pos_weight=%.2f",
-             y_train.mean() * 100, scale_pos_weight)
+    log.info("[ML] Dropped const/null=%d | Pos rate train=%.2f%% | scale_pos_weight raw=%.2f used=%.2f (power=%.2f)",
+             len(dropped), y_train.mean() * 100, raw_scale_pos_weight, scale_pos_weight, POS_WEIGHT_POWER)
+    log.info("[ML] Feature groups: spatial_nbr=%d temporal=%d criminology=%d",
+             sum("nbr" in c for c in feature_cols),
+             sum(("roll" in c or "lag" in c or "ewm" in c) for c in feature_cols),
+             sum(any(x in c for x in ["near_repeat", "arrest_rate", "deterrence", "hardship_x", "unemployment_x", "contagion", "reactivation"]) for c in feature_cols))
 
     params = dict(XGB_PARAMS)
     params["scale_pos_weight"] = scale_pos_weight
@@ -1048,9 +1162,21 @@ def train_model(
     val_prob   = model.predict_proba(X_val)[:, 1]
     test_prob  = model.predict_proba(X_test)[:, 1]
 
-    best_t, _ = find_best_threshold(y_calib.values, calib_prob)
-    val_pred   = (val_prob  >= best_t).astype(int)
-    test_pred  = (test_prob >= best_t).astype(int)
+    if USE_PRED_RATE_GUARD:
+        best_t, best_f1_calib, thr_df = find_best_threshold_guarded(y_calib.values, calib_prob)
+        log.info("[ML] Calibrated threshold guarded: %.2f | F1_CALIB=%.4f | calib_base=%.4f",
+                 best_t, best_f1_calib, float(y_calib.mean()))
+        try:
+            near = thr_df.iloc[(thr_df["threshold"] - best_t).abs().argsort()[:5]].sort_values("threshold")
+            log.info("[ML] Threshold candidates near best:\n%s", near.to_string(index=False))
+        except Exception:
+            pass
+    else:
+        best_t, best_f1_calib = find_best_threshold(y_calib.values, calib_prob)
+        log.info("[ML] Calibrated threshold F1-only: %.2f | F1_CALIB=%.4f", best_t, best_f1_calib)
+
+    val_pred  = (val_prob  >= best_t).astype(int)
+    test_pred = (test_prob >= best_t).astype(int)
 
     def _metrics(y_true, y_pred, y_prob):
         return {
@@ -1059,22 +1185,18 @@ def train_model(
             "f1":        float(f1_score(y_true,        y_pred, zero_division=0)),
             "auc":       float(roc_auc_score(y_true, y_prob)),
             "ap":        float(average_precision_score(y_true, y_prob)),
+            "pred_rate": float(np.mean(y_pred)),
         }
 
     val_res  = _metrics(y_val.values,  val_pred,  val_prob)
     test_res = _metrics(y_test.values, test_pred, test_prob)
 
-    log.info(
-        "[ML] VAL  – P=%.4f R=%.4f F1=%.4f AUC=%.4f AP=%.4f",
-        val_res["precision"], val_res["recall"], val_res["f1"],
-        val_res["auc"],       val_res["ap"],
-    )
-    log.info(
-        "[ML] TEST – P=%.4f R=%.4f F1=%.4f AUC=%.4f AP=%.4f",
-        test_res["precision"], test_res["recall"], test_res["f1"],
-        test_res["auc"],       test_res["ap"],
-    )
-    log.info("[ML] Calibrated threshold (F1-optimal on CALIB): %.2f", best_t)
+    log.info("[ML] VAL  – P=%.4f R=%.4f F1=%.4f AUC=%.4f AP=%.4f pred_rate=%.3f",
+             val_res["precision"], val_res["recall"], val_res["f1"],
+             val_res["auc"], val_res["ap"], val_res["pred_rate"])
+    log.info("[ML] TEST – P=%.4f R=%.4f F1=%.4f AUC=%.4f AP=%.4f pred_rate=%.3f",
+             test_res["precision"], test_res["recall"], test_res["f1"],
+             test_res["auc"], test_res["ap"], test_res["pred_rate"])
 
     return model, feature_cols, train_medians, best_t, val_res, test_res, scale_pos_weight
 
@@ -1124,8 +1246,8 @@ def build_predictions(
 
     ctx_cols = [
         "community_area", "hardship_index", "unemployment_rate", "population_density",
-        "h3_train_percentile", "roll_mean_7", "roll_mean_30", "zero_streak",
-        "nbr_r1_mean", "near_repeat_3d", "arrest_rate_7", "is_holiday",
+         "h3_train_percentile", "h3_train_active_rate", "roll_mean_7", "roll_mean_30", "zero_streak",
+        "nbr_r1_mean", "nbr_r1_active_rate", "nbr_r1_active_count", "near_repeat_3d", "arrest_rate_7", "is_holiday",
     ]
     for c in ctx_cols:
         if c in df_latest.columns:
@@ -1196,8 +1318,8 @@ def train_and_predict(
     dataset:           str,
     enriched_table:    str  = "enriched_crime_data",
     predictions_table: str  = "prediction_results",
-    lookback_days:     int  = 400,
-    model_output_path: str  = "/tmp/crime_model_v11.pkl",
+    lookback_days:     int  = RECENT_DAYS_TO_KEEP,
+    model_output_path: str  = "/tmp/crime_model_v13.pkl",
     write_mode:        str  = "WRITE_TRUNCATE",
     **kwargs,
 ) -> dict:
@@ -1219,7 +1341,7 @@ def train_and_predict(
     dict với val_auc, test_auc, val_f1, test_f1, n_predictions, threshold
     """
     log.info("=" * 72)
-    log.info("  Chicago Crime Hotspot Forecasting  –  ml_pipeline v11")
+    log.info("  Chicago Crime Hotspot Forecasting  –  ml_pipeline v13 dynamic-spatial")
     log.info("  Target: next_has_crime = (next_total >= 1) | schema OK")
     log.info("=" * 72)
 
@@ -1244,10 +1366,10 @@ def train_and_predict(
     )
     eligible = supervised_dates[MIN_HISTORY_DAYS:]
 
-    if len(eligible) < TEST_DAYS + VAL_DAYS + CALIB_DAYS + 30:
+    if len(eligible) < TRAIN_DAYS + TEST_DAYS + VAL_DAYS + CALIB_DAYS:
         raise ValueError(
             f"Not enough history ({len(eligible)} eligible days). "
-            f"Need at least {TEST_DAYS + VAL_DAYS + CALIB_DAYS + 30} days."
+            f"Need at least {TRAIN_DAYS + TEST_DAYS + VAL_DAYS + CALIB_DAYS} days."
         )
 
     test_dates  = eligible[-TEST_DAYS:]
@@ -1262,7 +1384,7 @@ def train_and_predict(
              val_dates[0].date(),   val_dates[-1].date(),
              test_dates[0].date(),  test_dates[-1].date())
 
-    # ── Step 5: Feature engineering v11 ──────────────────────────────────
+    # ── Step 5: Feature engineering v13 ──────────────────────────────────
     df_feat = build_features(daily, all_h3, nbr_r1, nbr_r2, has_h3, train_dates)
 
     # Add target
@@ -1310,7 +1432,7 @@ def train_and_predict(
 
     # ── Summary ───────────────────────────────────────────────────────────
     log.info("=" * 72)
-    log.info("  SUMMARY v11")
+    log.info("  SUMMARY v13 dynamic-spatial")
     log.info("  VAL  AUC=%.4f  F1=%.4f  AP=%.4f", val_res["auc"],  val_res["f1"],  val_res["ap"])
     log.info("  TEST AUC=%.4f  F1=%.4f  AP=%.4f", test_res["auc"], test_res["f1"], test_res["ap"])
     log.info("  Threshold (F1-calib)=%.2f  |  Predictions=%d", best_threshold, len(df_pred))
@@ -1344,7 +1466,7 @@ def make_airflow_callable(
     from ml_pipeline import make_airflow_callable
 
     run_ml = PythonOperator(
-        task_id="train_predict_v11",
+        task_id="train_predict_v13",
         python_callable=make_airflow_callable(
             project_id="sage-mind-489618-n5",
             dataset="cdash_warehouse",
@@ -1358,8 +1480,8 @@ def make_airflow_callable(
             dataset           = dataset,
             enriched_table    = kwargs.get("enriched_table",    "enriched_crime_data"),
             predictions_table = kwargs.get("predictions_table", "prediction_results"),
-            lookback_days     = kwargs.get("lookback_days",     400),
-            model_output_path = kwargs.get("model_output_path", "/tmp/crime_model_v11.pkl"),
+            lookback_days     = kwargs.get("lookback_days",     RECENT_DAYS_TO_KEEP),
+            model_output_path = kwargs.get("model_output_path", "/tmp/crime_model_v13.pkl"),
             write_mode        = kwargs.get("write_mode",        "WRITE_TRUNCATE"),
         )
     return _callable
@@ -1378,13 +1500,13 @@ if __name__ == "__main__":
         datefmt = "%H:%M:%S",
     )
 
-    parser = argparse.ArgumentParser(description="Crime Hotspot ML Pipeline v11")
+    parser = argparse.ArgumentParser(description="Crime Hotspot ML Pipeline v13")
     parser.add_argument("--project",    required=True,  help="GCP Project ID")
     parser.add_argument("--dataset",    required=True,  help="BigQuery dataset")
     parser.add_argument("--enriched",   default="enriched_crime_data")
     parser.add_argument("--predictions",default="prediction_results")
-    parser.add_argument("--lookback",   type=int, default=400)
-    parser.add_argument("--model_path", default="/tmp/crime_model_v11.pkl")
+    parser.add_argument("--lookback",   type=int, default=RECENT_DAYS_TO_KEEP)
+    parser.add_argument("--model_path", default="/tmp/crime_model_v13.pkl")
     parser.add_argument("--write_mode", default="WRITE_TRUNCATE",
                         choices=["WRITE_TRUNCATE", "WRITE_APPEND"])
     args = parser.parse_args()
