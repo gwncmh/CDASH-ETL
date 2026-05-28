@@ -1,0 +1,18 @@
+[2026-05-28T10:54:23.468+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_bronze manual__2026-05-28T10:50:32.435865+00:00 [queued]>
+[2026-05-28T10:54:23.476+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_bronze manual__2026-05-28T10:50:32.435865+00:00 [queued]>
+[2026-05-28T10:54:23.477+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2026-05-28T10:54:23.492+0000] {taskinstance.py:2191} INFO - Executing <Task(DataprocSubmitJobOperator): etl_bronze> on 2026-05-28 10:50:32.435865+00:00
+[2026-05-28T10:54:23.502+0000] {standard_task_runner.py:60} INFO - Started process 15899 to run task
+[2026-05-28T10:54:23.506+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'etl_bronze', 'manual__2026-05-28T10:50:32.435865+00:00', '--job-id', '266', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpdmhv5w2m']
+[2026-05-28T10:54:23.509+0000] {standard_task_runner.py:88} INFO - Job 266: Subtask etl_bronze
+[2026-05-28T10:54:23.606+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.etl_bronze manual__2026-05-28T10:50:32.435865+00:00 [running]> on host db8b8170dea9
+[2026-05-28T10:54:23.725+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='etl_bronze' AIRFLOW_CTX_EXECUTION_DATE='2026-05-28T10:50:32.435865+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-28T10:50:32.435865+00:00'
+[2026-05-28T10:54:23.727+0000] {dataproc.py:2208} INFO - Submitting job
+[2026-05-28T10:54:23.741+0000] {connection.py:234} WARNING - Connection schemes (type: google_cloud_platform) shall not contain '_' according to RFC3986.
+[2026-05-28T10:54:23.743+0000] {base.py:83} INFO - Using connection ID 'google_cloud_default' for task execution.
+[2026-05-28T10:54:25.292+0000] {dataproc.py:2220} INFO - Job dd828cad-440d-4516-bac8-69fbbd1308af submitted successfully.
+[2026-05-28T10:54:25.333+0000] {dataproc.py:2254} INFO - Waiting for job dd828cad-440d-4516-bac8-69fbbd1308af to complete
+[2026-05-28T10:55:11.182+0000] {dataproc.py:2258} INFO - Job dd828cad-440d-4516-bac8-69fbbd1308af completed successfully.
+[2026-05-28T10:55:11.214+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=crime_analytics_pipeline, task_id=etl_bronze, execution_date=20260528T105032, start_date=20260528T105423, end_date=20260528T105511
+[2026-05-28T10:55:11.264+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-05-28T10:55:11.298+0000] {taskinstance.py:3280} INFO - 1 downstream tasks scheduled from follow-on schedule check
