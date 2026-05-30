@@ -124,8 +124,6 @@ BQ_PREDICTION_SCHEMA = [
     bigquery.SchemaField("hardship_index",    "FLOAT"),
     bigquery.SchemaField("unemployment_rate", "FLOAT"),
     bigquery.SchemaField("population_density","FLOAT"),
-    bigquery.SchemaField("h3_train_pct",      "FLOAT"),
-    bigquery.SchemaField("h3_train_active_rate", "FLOAT"),
     bigquery.SchemaField("roll_mean_7",       "FLOAT"),
     bigquery.SchemaField("roll_mean_30",      "FLOAT"),
     bigquery.SchemaField("zero_streak",       "FLOAT"),
