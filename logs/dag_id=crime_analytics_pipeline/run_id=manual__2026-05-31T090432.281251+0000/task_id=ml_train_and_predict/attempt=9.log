@@ -1,0 +1,32 @@
+[2026-05-31T10:09:28.409+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-31T09:04:32.281251+00:00 [queued]>
+[2026-05-31T10:09:28.428+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-31T09:04:32.281251+00:00 [queued]>
+[2026-05-31T10:09:28.431+0000] {taskinstance.py:2170} INFO - Starting attempt 9 of 10
+[2026-05-31T10:09:28.460+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-31 09:04:32.281251+00:00
+[2026-05-31T10:09:28.473+0000] {standard_task_runner.py:60} INFO - Started process 3398 to run task
+[2026-05-31T10:09:28.477+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-05-31T09:04:32.281251+00:00', '--job-id', '359', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpfz2j4cnm']
+[2026-05-31T10:09:28.481+0000] {standard_task_runner.py:88} INFO - Job 359: Subtask ml_train_and_predict
+[2026-05-31T10:09:28.555+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-31T09:04:32.281251+00:00 [running]> on host db8b8170dea9
+[2026-05-31T10:09:28.671+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-31T09:04:32.281251+00:00' AIRFLOW_CTX_TRY_NUMBER='9' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-31T09:04:32.281251+00:00'
+[2026-05-31T10:09:29.536+0000] {ml_pipeline.py:1411} INFO - ========================================================================
+[2026-05-31T10:09:29.537+0000] {ml_pipeline.py:1412} INFO -   Chicago Crime Hotspot Forecasting  –  ml_pipeline v14 precision
+[2026-05-31T10:09:29.537+0000] {ml_pipeline.py:1413} INFO - ========================================================================
+[2026-05-31T10:09:29.538+0000] {ml_pipeline.py:1417} INFO -   Model version: 2026-05-31.crime_prob_v14_precision
+[2026-05-31T10:09:31.979+0000] {ml_pipeline.py:1429} INFO - [ML] Lag correction loaded: 77 community areas, mean_factor=1.000
+[2026-05-31T10:09:31.982+0000] {ml_pipeline.py:304} INFO - [ML] Loading enriched_crime_data from BigQuery (last 600 days)...
+[2026-05-31T10:09:41.240+0000] {ml_pipeline.py:368} INFO - [ML] Loaded 374226 rows, date range: 2024-10-08 → 2026-05-18
+[2026-05-31T10:09:41.240+0000] {ml_pipeline.py:378} INFO - [ML] Aggregating daily per H3...
+[2026-05-31T10:10:07.447+0000] {ml_pipeline.py:449} INFO - [ML] Daily grid: 2,960,580 rows, 5035 H3 cells, 588 dates
+[2026-05-31T10:10:07.611+0000] {ml_pipeline.py:470} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.5
+[2026-05-31T10:10:08.131+0000] {ml_pipeline.py:1453} INFO - [ML] lag_buffer_days=5 applied: 527 eligible days after trimming
+[2026-05-31T10:10:08.143+0000] {ml_pipeline.py:1474} INFO - [ML] Split  Train: 2025-06-24→2026-04-19 (300 d)  Val: 2026-05-04→2026-05-10  Test: 2026-05-11→2026-05-17
+[2026-05-31T10:10:08.810+0000] {ml_pipeline.py:513} INFO - [ML]   [4A] Own-cell lag/rolling features
+[2026-05-31T10:10:55.217+0000] {ml_pipeline.py:536} INFO - [ML]   [4A] EWM features (per-group loop)
+[2026-05-31T10:11:19.293+0000] {ml_pipeline.py:559} INFO - [ML]   [4B] Burst/streak features
+[2026-05-31T10:11:20.758+0000] {ml_pipeline.py:584} INFO - [ML]   [4C] Crime-type composition
+[2026-05-31T10:11:36.483+0000] {ml_pipeline.py:601} INFO - [ML]   [4D] Weather/context features
+[2026-05-31T10:11:41.311+0000] {ml_pipeline.py:617} INFO - [ML]   [4E] Community-level features
+[2026-05-31T10:11:47.071+0000] {ml_pipeline.py:665} INFO - [ML]   [4F] City-level features
+[2026-05-31T10:12:13.600+0000] {ml_pipeline.py:699} INFO - [ML]   [4G] H3 spatial spillover v14 – explicit merge (no reshape)
+[2026-05-31T10:12:17.690+0000] {ml_pipeline.py:775} INFO - [ML]     computing nbr features via explicit stack-merge ...
+[2026-05-31T10:12:43.777+0000] {local_task_job_runner.py:234} INFO - Task exited with return code -9
+[2026-05-31T10:12:44.239+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

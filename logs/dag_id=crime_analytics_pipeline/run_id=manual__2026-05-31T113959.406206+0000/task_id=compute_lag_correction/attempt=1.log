@@ -1,0 +1,19 @@
+[2026-05-31T11:40:09.511+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.compute_lag_correction manual__2026-05-31T11:39:59.406206+00:00 [queued]>
+[2026-05-31T11:40:09.518+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.compute_lag_correction manual__2026-05-31T11:39:59.406206+00:00 [queued]>
+[2026-05-31T11:40:09.519+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2026-05-31T11:40:09.531+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): compute_lag_correction> on 2026-05-31 11:39:59.406206+00:00
+[2026-05-31T11:40:09.541+0000] {standard_task_runner.py:60} INFO - Started process 4805 to run task
+[2026-05-31T11:40:09.544+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'compute_lag_correction', 'manual__2026-05-31T11:39:59.406206+00:00', '--job-id', '375', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmptzz2482k']
+[2026-05-31T11:40:09.549+0000] {standard_task_runner.py:88} INFO - Job 375: Subtask compute_lag_correction
+[2026-05-31T11:40:09.623+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.compute_lag_correction manual__2026-05-31T11:39:59.406206+00:00 [running]> on host db8b8170dea9
+[2026-05-31T11:40:09.740+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='compute_lag_correction' AIRFLOW_CTX_EXECUTION_DATE='2026-05-31T11:39:59.406206+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-31T11:39:59.406206+00:00'
+[2026-05-31T11:40:11.264+0000] {dag_crime_pipeline.py:196} WARNING - [LAG] compute_lag_correction query failed: 404 Not found: Table sage-mind-489618-n5:cdash_warehouse.fact_crimes was not found in location us-central1; reason: notFound, message: Not found: Table sage-mind-489618-n5:cdash_warehouse.fact_crimes was not found in location us-central1
+
+Location: us-central1
+Job ID: 328c4f2c-d081-4261-9810-840dd9b7ec06
+. Using lag_factor=1.0.
+[2026-05-31T11:40:12.870+0000] {dag_crime_pipeline.py:214} INFO - [LAG] Lag correction written: 77 community areas. Mean factor=1.000
+[2026-05-31T11:40:12.870+0000] {python.py:201} INFO - Done. Returned value was: None
+[2026-05-31T11:40:12.901+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=crime_analytics_pipeline, task_id=compute_lag_correction, execution_date=20260531T113959, start_date=20260531T114009, end_date=20260531T114012
+[2026-05-31T11:40:12.970+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-05-31T11:40:13.003+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

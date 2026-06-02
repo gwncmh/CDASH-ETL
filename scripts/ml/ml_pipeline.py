@@ -47,9 +47,9 @@ MODEL_VERSION_PREFIX = "hotspot_v20_target_safe_ranker"
 
 # Rolling split windows (ngày)
 TRAIN_DAYS       = 220
-CALIB_DAYS       = 14
+CALIB_DAYS       = 21
 VAL_DAYS         = 7
-TEST_DAYS        = 7
+TEST_DAYS        = 14
 MIN_HISTORY_DAYS = 60
 
 RANDOM_STATE = 42
@@ -59,6 +59,7 @@ XGB_PARAMS = dict(
     n_estimators          = 1800,
     learning_rate         = 0.025,
     max_depth             = 4,
+<<<<<<< Updated upstream
     min_child_weight      = 8,
     subsample             = 0.90,
     colsample_bytree      = 0.75,
@@ -66,6 +67,15 @@ XGB_PARAMS = dict(
     colsample_bynode      = 0.90,
     reg_alpha             = 0.30,
     reg_lambda            = 4.0,
+=======
+    min_child_weight      = 20,
+    subsample             = 0.85,
+    colsample_bytree      = 0.40,
+    colsample_bylevel     = 0.60,
+    colsample_bynode      = 0.70,
+    reg_alpha             = 1.50,
+    reg_lambda            = 12.0,
+>>>>>>> Stashed changes
     objective             = "binary:logistic",
     eval_metric           = "aucpr",
     tree_method           = "hist",
@@ -76,8 +86,13 @@ XGB_PARAMS = dict(
 
 THRESHOLD_GRID = np.arange(0.05, 0.65, 0.01).tolist()
 
+<<<<<<< Updated upstream
 # v20 experiment controls
 RECENT_DAYS_TO_KEEP = 320
+=======
+# v13 experiment controls
+RECENT_DAYS_TO_KEEP = 400
+>>>>>>> Stashed changes
 FLOAT_POLICY = "float32"
 
 # Binary target: HOTSPOT means tomorrow count >= 2.
@@ -413,8 +428,9 @@ def find_best_threshold_guarded(
     )
 
 
-def h3_grid_disk_compat(h3lib, cell: str, k: int):
+def h3_grid_disk_compat(h3lib, cell, k):
     """Compatible with h3 v3/v4."""
+    cell = str(cell)
     if hasattr(h3lib, "grid_disk"):
         return h3lib.grid_disk(cell, k)
     if hasattr(h3lib, "k_ring"):
@@ -517,6 +533,93 @@ def load_enriched_data(
              len(df), df["date"].min().date(), df["date"].max().date())
     return df
 
+# ── PATCH: Seasonal historical loader ─────────────────────────────────
+# Chèn NGAY SAU hàm load_enriched_data() (sau dòng return df)
+# ──────────────────────────────────────────────────────────────────────
+
+def load_seasonal_data(
+    client: bigquery.Client,
+    project_id: str,
+    dataset: str,
+    enriched_table: str,
+    target_months: list[int],   # [3, 4, 5, 6] cho Spring-Summer
+    year_start: int = 2015,
+    year_end:   int = 2024,
+) -> pd.DataFrame:
+    """
+    Kéo dữ liệu cùng mùa từ các năm lịch sử.
+    Dùng để bổ sung vào train set, giúp model học seasonal pattern.
+    
+    Chỉ lấy các cột tối thiểu cần thiết — không cần rolling features
+    vì sẽ được tính lại trong aggregate_daily().
+    """
+    months_str = ",".join(str(m) for m in target_months)
+    log.info(
+        "[ML] Loading seasonal data: months=%s, years=%d-%d...",
+        months_str, year_start, year_end,
+    )
+
+    query = f"""
+        SELECT
+            h3_index,
+            DATE(date)                          AS date,
+            primary_type,
+            community_area,
+            latitude,
+            longitude,
+            hour_of_day,
+            day_of_week,
+            month,
+            temp_max,
+            CAST(NULL AS FLOAT64)               AS temp_min,
+            precipitation,
+            wind_speed,
+            unemployment_rate,
+            hardship_index,
+            population_density,
+            per_capita_income,
+            dist_nearest_school,
+            dist_nearest_station,
+            dist_nearest_park,
+            dist_nearest_nightlife,
+            crime_density_7d,
+            crime_density_30d,
+            arrest_rate,
+            CAST(ROUND(arrest_rate) AS INT64)   AS arrest_flag,
+            CASE WHEN UPPER(TRIM(primary_type))
+                      IN ('BATTERY','ASSAULT','ROBBERY','HOMICIDE',
+                          'CRIMINAL SEXUAL ASSAULT','SEX OFFENSE',
+                          'KIDNAPPING','INTIMIDATION')
+                 THEN 1 ELSE 0 END              AS is_violent,
+            CASE WHEN UPPER(TRIM(primary_type))
+                      IN ('THEFT','BURGLARY','MOTOR VEHICLE THEFT',
+                          'CRIMINAL DAMAGE','DECEPTIVE PRACTICE','ARSON')
+                 THEN 1 ELSE 0 END              AS is_property,
+            CASE WHEN UPPER(TRIM(primary_type)) = 'THEFT'
+                 THEN 1 ELSE 0 END              AS is_theft,
+            CASE WHEN UPPER(TRIM(primary_type)) = 'BATTERY'
+                 THEN 1 ELSE 0 END              AS is_battery,
+            CASE WHEN REGEXP_CONTAINS(UPPER(primary_type), r'NARCOTIC|DRUG')
+                 THEN 1 ELSE 0 END              AS is_narcotics,
+            CASE WHEN hour_of_day IN (0,1,2,3,4,5,22,23)
+                 THEN 1 ELSE 0 END              AS is_night,
+            CASE WHEN hour_of_day BETWEEN 18 AND 21
+                 THEN 1 ELSE 0 END              AS is_evening
+        FROM `{project_id}.{dataset}.{enriched_table}`
+        WHERE EXTRACT(MONTH FROM date) IN ({months_str})
+          AND EXTRACT(YEAR  FROM date) BETWEEN {year_start} AND {year_end}
+          AND h3_index  IS NOT NULL
+          AND latitude  IS NOT NULL
+          AND longitude IS NOT NULL
+    """
+    df = client.query(query).to_dataframe()
+    df["date"] = pd.to_datetime(df["date"]).dt.floor("D")
+    log.info(
+        "[ML] Seasonal data loaded: %d rows, %d unique dates",
+        len(df), df["date"].nunique(),
+    )
+    return df
+# ── END PATCH ─────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3.  AGGREGATE: RAW EVENTS → DAILY PER H3
@@ -577,6 +680,22 @@ def aggregate_daily(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     # Cartesian expand: mọi H3 × ngày đều xuất hiện
     all_h3    = np.array(sorted(raw["h3_index"].unique()))
+    blocks = []
+    for year, grp in raw.groupby(raw["date"].dt.year):
+        year_dates = pd.date_range(grp["date"].min(), grp["date"].max(), freq="D")
+        year_h3    = np.array(sorted(grp["h3_index"].unique()))
+        idx = pd.MultiIndex.from_product(
+            [year_h3, year_dates], names=["h3_index", "date"]
+        )
+        block = (
+            daily[daily["date"].dt.year == year]
+            .set_index(["h3_index", "date"])
+            .reindex(idx)
+            .reset_index()
+        )
+        blocks.append(block)
+
+    daily = pd.concat(blocks, ignore_index=True)
     all_dates = pd.date_range(raw["date"].min(), raw["date"].max(), freq="D")
     full_idx  = pd.MultiIndex.from_product(
         [all_h3, all_dates], names=["h3_index", "date"]
@@ -663,22 +782,17 @@ def build_features(
     df = daily.sort_values(["h3_index", "date"]).reset_index(drop=True).copy()
     g  = df.groupby("h3_index", group_keys=False)
 
-    # ── 4A  Own-cell lag / rolling ────────────────────────────────────────
-    log.info("[ML]   [4A] Own-cell lag/rolling features")
-    for lag in [1, 2, 3, 4, 5, 6, 7, 14, 21, 28]:
+    # ── 4A  PATCH v14: Orthogonal Temporal Features ───────────────────────
+    # Triết lý: mỗi feature trả lời MỘT câu hỏi cụ thể, không trùng lặp
+    log.info("[ML]   [4A] Orthogonal temporal features (v14)")
+
+    # --- CÂU HỎI 1: Ngày gần nhất trông như thế nào? (lag thuần) ---
+    for lag in [1, 2, 3, 7, 14]:
         df[f"lag_{lag}"] = g["total_crimes"].shift(lag).astype("float32")
 
-    for _col, prefix in [
-        ("is_violent",   "violent"),
-        ("is_property",  "property"),
-        ("is_theft",     "theft"),
-        ("is_battery",   "battery"),
-        ("is_narcotics", "narcotics"),
-    ]:
-        for lag in [1, 2, 3, 7, 14]:
-            df[f"{prefix}_lag_{lag}"] = g[_col].shift(lag).astype("float32")
-
-    for w in [3, 5, 7, 14, 21, 30, 45, 60, 90]:
+    # --- CÂU HỎI 2: Mức nền ngắn/trung/dài hạn? (chỉ 3 windows đại diện) ---
+    # 7d = ngắn hạn, 30d = trung hạn, 90d = dài hạn. Bỏ 14/21/45/60.
+    for w in [7, 30, 90]:
         shifted = g["total_crimes"].shift(1)
         roll    = shifted.groupby(df["h3_index"]).rolling(w, min_periods=2)
         df[f"roll_mean_{w}"] = roll.mean().reset_index(level=0, drop=True).astype("float32")
@@ -686,18 +800,39 @@ def build_features(
         df[f"roll_std_{w}"]  = roll.std().reset_index(level=0, drop=True).astype("float32")
         df[f"roll_max_{w}"]  = roll.max().reset_index(level=0, drop=True).astype("float32")
 
-    for span in [7, 14, 30, 60, 90]:
-        df[f"ewm_{span}"] = (
-            g["total_crimes"]
-            .shift(1)
-            .groupby(df["h3_index"])
-            .ewm(span=span, adjust=False, min_periods=2)
-            .mean()
-            .reset_index(level=0, drop=True)
-            .astype("float32")
-        )
+    # Backward-compat aliases (các block 4B-4P dùng roll_mean_14/45/60/etc)
+    for src, aliases in [
+        ("roll_mean_7",  ["roll_mean_3",  "roll_mean_5",  "roll_mean_14", "roll_mean_21"]),
+        ("roll_mean_30", ["roll_mean_45", "roll_mean_60"]),
+        ("roll_sum_7",   ["roll_sum_3",   "roll_sum_5",   "roll_sum_14",  "roll_sum_21"]),
+        ("roll_sum_30",  ["roll_sum_45",  "roll_sum_60"]),
+        ("roll_std_7",   ["roll_std_14",  "roll_std_30"]),
+        ("roll_std_90",  ["roll_std_45",  "roll_std_60"]),
+        ("roll_max_7",   ["roll_max_3",   "roll_max_30",  "roll_max_60"]),
+    ]:
+        for alias in aliases:
+            if alias not in df.columns:
+                df[alias] = df[src].astype("float32")
 
-    for w in [7, 14, 30, 60]:
+    # --- CÂU HỎI 3: Xu hướng đang tăng hay giảm? (signal trực giao với mức nền) ---
+    # delta = mức nền ngắn hạn - mức nền dài hạn (đã chuẩn hóa)
+    df["trend_7_vs_90"] = (
+        (df["roll_mean_7"] - df["roll_mean_90"])
+        / (df["roll_mean_90"].fillna(0) + 1e-3)
+    ).clip(-3, 3).astype("float32")
+
+    df["trend_7_vs_30"] = (
+        (df["roll_mean_7"] - df["roll_mean_30"])
+        / (df["roll_mean_30"].fillna(0) + 1e-3)
+    ).clip(-3, 3).astype("float32")
+
+    # --- CÂU HỎI 4: Sự ổn định? (biến động so với mức nền) ---
+    df["volatility_ratio"] = (
+        df["roll_std_7"] / (df["roll_mean_30"].fillna(0) + 1e-3)
+    ).clip(0, 5).astype("float32")
+
+    # --- CÂU HỎI 5: Có bao nhiêu % ngày active? (tần suất, khác với mức độ) ---
+    for w in [7, 30, 90]:
         df[f"active_rate_{w}"] = (
             g["crime_today"]
             .shift(1)
@@ -707,6 +842,42 @@ def build_features(
             .reset_index(level=0, drop=True)
             .astype("float32")
         )
+    df["active_rate_14"] = df["active_rate_7"].astype("float32")
+    df["active_rate_60"] = df["active_rate_30"].astype("float32")
+
+    # --- CÂU HỎI 6: EWM chỉ 2 scales (bỏ các scales trung gian) ---
+    for span in [7, 90]:
+        df[f"ewm_{span}"] = (
+            g["total_crimes"]
+            .shift(1)
+            .groupby(df["h3_index"])
+            .ewm(span=span, adjust=False, min_periods=2)
+            .mean()
+            .reset_index(level=0, drop=True)
+            .astype("float32")
+        )
+    # Aliases cho ewm_14/30/60 (dùng ở downstream)
+    df["ewm_14"] = df["ewm_7"].astype("float32")
+    df["ewm_30"] = df["ewm_90"].astype("float32")
+    df["ewm_60"] = df["ewm_90"].astype("float32")
+
+    # --- CÂU HỎI 7: Crime type lags (giữ nguyên nhưng giảm) ---
+    for _col, prefix in [
+        ("is_violent",   "violent"),
+        ("is_property",  "property"),
+        ("is_narcotics", "narcotics"),   # bỏ theft/battery (tương quan cao với property/violent)
+    ]:
+        for lag in [1, 7]:
+            df[f"{prefix}_lag_{lag}"] = g[_col].shift(lag).astype("float32")
+        # Aliases
+        for lag in [2, 3, 14]:
+            df[f"{prefix}_lag_{lag}"] = df[f"{prefix}_lag_1"].astype("float32")
+
+    # Aliases cho theft/battery (dùng ở block 4C)
+    for lag in [1, 2, 3, 7, 14]:
+        df[f"theft_lag_{lag}"]   = df[f"property_lag_1"].astype("float32")
+        df[f"battery_lag_{lag}"] = df[f"violent_lag_1"].astype("float32")
+    # ── END 4A PATCH ──────────────────────────────────────────────────────
 
     # ── 4B  Burst / streak ────────────────────────────────────────────────
     log.info("[ML]   [4B] Burst/streak features")
@@ -788,7 +959,6 @@ def build_features(
                 .astype("float32")
             )
             df[f"{c}_diff1"] = (df[c] - df[f"{c}_lag1"]).astype("float32")
-
     # ── 4E  Community-level temporal ─────────────────────────────────────
     log.info("[ML]   [4E] Community-level features")
     if "community_area" in df.columns:
@@ -836,7 +1006,6 @@ def build_features(
     df = df.merge(comm_daily.drop(columns=drop_cols), on=["community_area", "date"], how="left")
     del comm_daily, n_h3_per_comm
     gc.collect()
-
     # ── 4F  City-level context ───────────────────────────────────────────
     log.info("[ML]   [4F] City-level features")
     city_daily = (
@@ -1233,6 +1402,163 @@ def build_features(
 # ─────────────────────────────────────────────────────────────────────────────
 # 6.  TRAIN + EVALUATE
 # ─────────────────────────────────────────────────────────────────────────────
+def _run_ablation_study(
+        df: pd.DataFrame,
+        train_dates: list,
+        calib_dates: list,
+        val_dates:   list,
+        test_dates:  list,
+        all_feature_cols: list[str],
+        train_medians: pd.Series,
+    ) -> None:
+        """
+        Chạy 4 model với feature subset khác nhau, log kết quả dạng bảng.
+        Dùng cho báo cáo học thuật — chứng minh đóng góp từng nhóm feature.
+        """
+        import xgboost as xgb
+        from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
+
+        log.info("=" * 72)
+        log.info("  ABLATION STUDY — Feature Group Contribution")
+        log.info("=" * 72)
+
+        # Định nghĩa nhóm — dùng lại hàm _group từ _log_feature_importance
+        def _group(name: str) -> str:
+            if any(x in name for x in ["nbr_r", "contagion", "spillover"]):
+                return "spatial_spillover"
+            if any(x in name for x in ["roll_", "lag_", "ewm_", "active_rate",
+                                        "burst", "streak", "trend_", "volatility",
+                                        "crime_z", "yoy_", "same_dow"]):
+                return "temporal_rolling"
+            if any(x in name for x in ["near_repeat", "arrest_rate", "deterrence",
+                                        "reactivation", "had_crime", "prev_crime"]):
+                return "criminology"
+            if any(x in name for x in ["hardship", "unemployment", "per_capita",
+                                        "population"]):
+                return "socioeconomic"
+            if any(x in name for x in ["temp_", "prcp", "wind", "precipitation",
+                                        "weather", "rain_", "heat_"]):
+                return "weather"
+            if any(x in name for x in ["holiday", "is_weekend", "dow_", "month_",
+                                        "doy_", "season", "dayofyear", "dayofweek",
+                                        "is_monday", "is_friday", "summer_flag"]):
+                return "calendar"
+            if any(x in name for x in ["comm_", "city_", "h3_city"]):
+                return "community_city"
+            if any(x in name for x in ["h3_train", "comm_train", "h3_vs_comm",
+                                        "h3_nbr_joint", "h3_vs_city",
+                                        "active_rate_vs_train"]):
+                return "spatial_prior"
+            if any(x in name for x in ["dist_nearest"]):
+                return "poi"
+            return "other"
+
+        # 4 scenarios cho ablation
+        SCENARIOS = {
+            "1_temporal_only": lambda cols: [
+                c for c in cols if _group(c) == "temporal_rolling"
+            ],
+            "2_temporal_spatial": lambda cols: [
+                c for c in cols
+                if _group(c) in ("temporal_rolling", "spatial_spillover",
+                                "spatial_prior", "community_city")
+            ],
+            "3_temporal_spatial_context": lambda cols: [
+                c for c in cols
+                if _group(c) in ("temporal_rolling", "spatial_spillover",
+                                "spatial_prior", "community_city",
+                                "weather", "calendar", "socioeconomic", "poi")
+            ],
+            "4_full": lambda cols: cols,
+        }
+
+        # Params nhẹ hơn để ablation chạy nhanh — không cần full 2500 trees
+        ABLATION_PARAMS = dict(XGB_PARAMS)
+        ABLATION_PARAMS["n_estimators"]          = 500
+        ABLATION_PARAMS["early_stopping_rounds"] = 50
+
+        supervised = df["next_total"].notna()
+        train_mask = df["date"].isin(train_dates) & supervised
+        val_mask   = df["date"].isin(val_dates)   & supervised
+        test_mask  = df["date"].isin(test_dates)  & supervised
+
+
+        y_train = df.loc[train_mask, "next_has_crime"].astype(int)
+        y_val   = df.loc[val_mask,   "next_has_crime"].astype(int)
+        y_test  = df.loc[test_mask,  "next_has_crime"].astype(int)
+
+        results = []
+
+        for scenario_name, feat_selector in SCENARIOS.items():
+            subset_cols = feat_selector(all_feature_cols)
+
+            if not subset_cols:
+                log.warning("[ABLATION] %s: no features selected, skipping", scenario_name)
+                continue
+
+            X_train, medians = sanitize_numeric(df.loc[train_mask], subset_cols)
+            X_val,   _       = sanitize_numeric(df.loc[val_mask],   subset_cols, medians)
+            X_test,  _       = sanitize_numeric(df.loc[test_mask],  subset_cols, medians)
+
+            neg = int((y_train == 0).sum())
+            pos = int((y_train == 1).sum())
+            spw = (neg / max(pos, 1)) ** POS_WEIGHT_POWER
+
+            params = dict(ABLATION_PARAMS)
+            params["scale_pos_weight"] = spw
+
+            model = xgb.XGBClassifier(**params)
+            model.fit(
+                X_train, y_train,
+                eval_set=[(X_train, y_train), (X_val, y_val)],
+                verbose=False,
+            )
+
+            val_prob  = model.predict_proba(X_val)[:, 1]
+            test_prob = model.predict_proba(X_test)[:, 1]
+
+            # Dùng threshold 0.5 cố định cho ablation để so sánh công bằng
+            val_pred  = (val_prob  >= 0.52).astype(int)
+            test_pred = (test_prob >= 0.52).astype(int)
+
+            row = {
+                "scenario":   scenario_name,
+                "n_features": len(subset_cols),
+                "val_auc":    round(roc_auc_score(y_val,  val_prob),  4),
+                "val_ap":     round(average_precision_score(y_val,  val_prob),  4),
+                "val_f1":     round(f1_score(y_val,  val_pred,  zero_division=0), 4),
+                "test_auc":   round(roc_auc_score(y_test, test_prob), 4),
+                "test_ap":    round(average_precision_score(y_test, test_prob), 4),
+                "test_f1":    round(f1_score(y_test, test_pred, zero_division=0), 4),
+            }
+            results.append(row)
+
+            log.info(
+                "[ABLATION] %-35s | features=%3d | "
+                "Val AUC=%.4f AP=%.4f F1=%.4f | "
+                "Test AUC=%.4f AP=%.4f F1=%.4f",
+                scenario_name, len(subset_cols),
+                row["val_auc"], row["val_ap"], row["val_f1"],
+                row["test_auc"], row["test_ap"], row["test_f1"],
+            )
+
+        # In bảng tổng kết dạng dễ copy vào báo cáo
+        log.info("[ABLATION] Summary table:")
+        log.info("[ABLATION] %-35s | %s | %s | %s | %s | %s | %s",
+                "Scenario", "Feats",
+                "Val_AUC", "Val_AP", "Val_F1",
+                "Tst_AUC", "Tst_AP", "Tst_F1")
+        log.info("[ABLATION] " + "-" * 100)
+        for r in results:
+            log.info(
+                "[ABLATION] %-35s | %5d | %.4f  | %.4f | %.4f | %.4f  | %.4f | %.4f",
+                r["scenario"], r["n_features"],
+                r["val_auc"], r["val_ap"], r["val_f1"],
+                r["test_auc"], r["test_ap"], r["test_f1"],
+            )
+
+        log.info("=" * 72)
+    # ── END ABLATION PATCH ─────────────────────────────────────────────────
 
 def train_model(
     df: pd.DataFrame,
@@ -1301,6 +1627,11 @@ def train_model(
             dropped.append(c)
     feature_cols = keep
 
+    # ── THÊM VÀO ĐÂY ─────────────────────────────────────────────────
+    seasonal_mask = (df["date"].dt.year < 2025) & supervised
+    combined_train_mask = train_mask | seasonal_mask
+    # ─────────────────────────────────────────────────────────────────
+
     X_train, train_medians = sanitize_numeric(df.loc[train_mask], feature_cols)
     X_calib, _             = sanitize_numeric(df.loc[calib_mask], feature_cols, train_medians)
     X_val,   _             = sanitize_numeric(df.loc[val_mask],   feature_cols, train_medians)
@@ -1311,6 +1642,14 @@ def train_model(
     y_val   = df.loc[val_mask,   TARGET_COL].astype(int)
     y_test  = df.loc[test_mask,  TARGET_COL].astype(int)
 
+    log.info("[DEBUG] Train size: combined=%d / recent_only=%d / seasonal_only=%d",
+                    combined_train_mask.sum(),
+                    train_mask.sum(),
+                    (seasonal_mask & ~train_mask).sum())
+    log.info("[DEBUG] Train pos rate: combined=%.2f%% / recent=%.2f%%",
+                    y_train.mean() * 100,
+                    df.loc[train_mask, "next_has_crime"].mean() * 100)
+    
     neg = int((y_train == 0).sum())
     pos = int((y_train == 1).sum())
     raw_scale_pos_weight = neg / max(pos, 1)
@@ -1352,7 +1691,101 @@ def train_model(
         verbose=200,
     )
     log.info("[ML] Training done. Best iteration: %s", getattr(model, "best_iteration", "n/a"))
+    # ── PATCH: Feature Importance Analysis ──────────────────────────────────────
+    # Chèn sau dòng: log.info("[ML] Training done. Best iteration: %s", ...)
+    # Tại file: scripts/ml/ml_pipeline.py, trong hàm train_model()
+    # ─────────────────────────────────────────────────────────────────────────────
 
+    def _log_feature_importance(model, feature_cols: list[str], top_n: int = 30) -> dict:
+        """
+        In top-N feature importance theo 3 metric: weight, gain, cover.
+        Trả về dict để caller có thể push lên XCom hoặc ghi log ngoài.
+        """
+        import pandas as pd
+
+        results = {}
+        for importance_type in ("weight", "gain", "cover"):
+            scores = model.get_booster().get_score(importance_type=importance_type)
+            if not scores:
+                continue
+
+            df_imp = (
+                pd.DataFrame.from_dict(scores, orient="index", columns=["score"])
+                .reset_index()
+                .rename(columns={"index": "feature"})
+                .sort_values("score", ascending=False)
+                .head(top_n)
+            )
+
+            # Map tên feature (XGBoost dùng f0, f1... nếu không truyền feature_names)
+            # Nếu model được fit với DataFrame thì tên đã đúng rồi
+            log.info(
+                "[ML][FI/%s] Top-%d features:\n%s",
+                importance_type.upper(),
+                top_n,
+                df_imp.to_string(index=False),
+            )
+            results[importance_type] = df_imp
+
+        # Phân tích thêm: tìm nhóm feature nào đang thống trị
+        if "gain" in results:
+            df_gain = results["gain"].copy()
+
+            # Gán nhóm dựa theo prefix tên feature
+            def _group(name: str) -> str:
+                if any(x in name for x in ["nbr_r", "spillover", "contagion"]):
+                    return "spatial_spillover"
+                if any(x in name for x in ["roll_", "lag_", "ewm_", "active_rate", "burst", "streak"]):
+                    return "temporal_rolling"
+                if any(x in name for x in ["near_repeat", "arrest_rate", "deterrence", "reactivation"]):
+                    return "criminology"
+                if any(x in name for x in ["hardship", "unemployment", "per_capita", "population"]):
+                    return "socioeconomic"
+                if any(x in name for x in ["temp_", "prcp", "wind", "precipitation", "weather"]):
+                    return "weather"
+                if any(x in name for x in ["holiday", "is_weekend", "dow_", "month_", "doy_"]):
+                    return "calendar"
+                if any(x in name for x in ["comm_", "city_", "h3_city"]):
+                    return "community_city"
+                if any(x in name for x in ["h3_train", "comm_train"]):
+                    return "spatial_prior"
+                if any(x in name for x in ["dist_nearest"]):
+                    return "poi"
+                return "other"
+
+            df_gain["group"] = df_gain["feature"].apply(_group)
+            group_summary = (
+                df_gain.groupby("group")["score"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()
+            )
+            group_summary["pct"] = (
+                group_summary["score"] / group_summary["score"].sum() * 100
+            ).round(1)
+
+            log.info(
+                "[ML][FI/GROUP] Feature group contribution (by GAIN):\n%s",
+                group_summary.to_string(index=False),
+            )
+            results["group_summary"] = group_summary
+
+            # Cảnh báo nếu 1 nhóm chiếm quá 60% — dấu hiệu overfitting vào nhóm đó
+            top_group = group_summary.iloc[0]
+            if top_group["pct"] > 60:
+                log.warning(
+                    "[ML][FI] ⚠️  Nhóm '%s' chiếm %.1f%% tổng GAIN — "
+                    "nguy cơ model phụ thuộc quá nhiều vào 1 loại feature. "
+                    "Xem xét tăng reg_alpha/reg_lambda hoặc giảm colsample_bytree.",
+                    top_group["group"],
+                    top_group["pct"],
+                )
+
+        return results
+
+    # Gọi ngay sau khi model.fit() xong:
+    fi_results = _log_feature_importance(model, feature_cols, top_n=30)
+    # ── END PATCH ────────────────────────────────────────────────────────────────
     calib_prob = model.predict_proba(X_calib)[:, 1]
     val_prob   = model.predict_proba(X_val)[:, 1]
     test_prob  = model.predict_proba(X_test)[:, 1]
@@ -1517,6 +1950,7 @@ def train_and_predict(
     bounded by top-k ranking to keep HIGH/CRITICAL controlled.
     """
     log.info("=" * 72)
+<<<<<<< Updated upstream
     log.info("  Chicago Crime Hotspot Forecasting – ml_pipeline v20 target-safe")
     log.info("  Target: next_hotspot = (next_total >= 2)")
     log.info("  Dashboard risk: CRITICAL=top5%%, HIGH+=top15%%, MEDIUM+=top30%%")
@@ -1526,6 +1960,69 @@ def train_and_predict(
     df_raw = load_enriched_data(client, project_id, dataset, enriched_table, lookback_days)
 
     daily, all_h3 = aggregate_daily(df_raw)
+=======
+    log.info("  Chicago Crime Hotspot Forecasting  –  ml_pipeline v13 dynamic-spatial")
+    log.info("  Target: next_has_crime = (next_total >= 2) | schema OK")
+    log.info("=" * 72)
+
+    # ── Step 1: Load data ─────────────────────────────────────────────────
+    client  = bigquery.Client(project=project_id)
+    df_raw  = load_enriched_data(
+        client, project_id, dataset, enriched_table, lookback_days
+    )
+    # ── Step 1b: Load seasonal historical data ────────────────────────────
+    # PATCH: Xác định tháng nào là "cùng mùa" với prediction target
+    # Target là ngày mai → lấy month của ngày mới nhất trong data
+    latest_month = pd.to_datetime(df_raw["date"]).max().month
+    # Lấy ±2 tháng xung quanh để có context đủ rộng
+    target_months = sorted(set(
+        ((latest_month - 2 + m) % 12) + 1
+        for m in range(5)   # -2, -1, 0, +1, +2
+    ))
+    log.info("[ML] Target prediction month=%d, seasonal months=%s",
+             latest_month, target_months)
+
+    df_seasonal = load_seasonal_data(
+        client, project_id, dataset, enriched_table,
+        target_months = target_months,
+        year_start    = 2020,
+        year_end      = pd.Timestamp.now().year - 1,
+    )
+
+    # Gộp recent + seasonal, dedup theo (h3_index, date)
+    df_combined = (
+        pd.concat([df_raw, df_seasonal], ignore_index=True)
+        .drop_duplicates(subset=["h3_index", "date", "primary_type"])
+        .reset_index(drop=True)
+    )
+    log.info(
+        "[ML] Combined: recent=%d + seasonal=%d → total=%d rows",
+        len(df_raw), len(df_seasonal), len(df_combined),
+    )
+    df_raw = df_combined   # downstream dùng df_raw như bình thường
+    # ── Step 2: Aggregate daily per H3 ───────────────────────────────────
+    daily, all_h3 = aggregate_daily(df_raw)
+    mask_recent = daily["date"] >= pd.Timestamp("2025-04-27")
+    recent_daily = daily[mask_recent]
+    pos_rate_1 = (recent_daily["total_crimes"] >= 1).mean()
+    pos_rate_2 = (recent_daily["total_crimes"] >= 2).mean()
+    zero_rate  = (recent_daily["total_crimes"] == 0).mean()
+
+    log.info("[DEBUG] Recent daily grid (2025-04-27→): %d rows", len(recent_daily))
+    log.info("[DEBUG] total_crimes=0 : %.2f%%", zero_rate * 100)
+    log.info("[DEBUG] total_crimes>=1: %.2f%%", pos_rate_1 * 100)
+    log.info("[DEBUG] total_crimes>=2: %.2f%%", pos_rate_2 * 100)
+    log.info("[DEBUG] total_crimes distribution:\n%s",
+            recent_daily["total_crimes"].value_counts()
+            .sort_index().head(10).to_string())
+
+    # So sánh với train set
+    mask_train = daily["date"].isin(train_dates) if 'train_dates' in dir() else mask_recent
+    log.info("[DEBUG] Unique dates in daily grid: %d", daily["date"].nunique())
+    log.info("[DEBUG] Date range: %s → %s", 
+            daily["date"].min().date(), daily["date"].max().date())
+    # ── Step 3: Build neighbor maps ───────────────────────────────────────
+>>>>>>> Stashed changes
     nbr_r1, nbr_r2, has_h3 = build_neighbor_maps(all_h3)
 
     # Rolling split dates computed before feature engineering, exactly as Kaggle v20.
@@ -1554,6 +2051,7 @@ def train_and_predict(
     df_feat = build_features(daily, all_h3, nbr_r1, nbr_r2, has_h3, train_dates)
 
     g_feat = df_feat.groupby("h3_index", group_keys=False)
+<<<<<<< Updated upstream
     df_feat["next_total"] = g_feat["total_crimes"].shift(-1)
     df_feat["next_has_crime"] = (df_feat["next_total"] >= 1).astype(np.int8)
     df_feat["next_hotspot"] = (df_feat["next_total"] >= 2).astype(np.int8)
@@ -1563,6 +2061,10 @@ def train_and_predict(
     df_feat.loc[supervised & (df_feat["next_total"] == 1), "next_topk_group"] = 1
     df_feat.loc[supervised & (df_feat["next_total"] >= 2), "next_topk_group"] = 2
     df_feat["next_rank_pct"] = np.nan
+=======
+    df_feat["next_total"]     = g_feat["total_crimes"].shift(-1)
+    df_feat["next_has_crime"] = (df_feat["next_total"] >= 2).astype(np.int8)
+>>>>>>> Stashed changes
 
     for name, dates in [("train", train_dates), ("calib", calib_dates), ("val", val_dates), ("test", test_dates)]:
         m = df_feat["date"].isin(dates) & supervised
@@ -1574,7 +2076,22 @@ def train_and_predict(
 
     df_pred = build_predictions(df_feat, model, feature_cols, train_medians, best_threshold, val_res, test_res)
     write_predictions_to_bq(client, df_pred, project_id, dataset, predictions_table, write_mode)
+<<<<<<< Updated upstream
 
+=======
+    # ── Step 8b: Ablation Study ───────────────────────────────────────────
+    _run_ablation_study(
+        df        = df_feat,
+        train_dates = train_dates,
+        calib_dates = calib_dates,
+        val_dates   = val_dates,
+        test_dates  = test_dates,
+        all_feature_cols = feature_cols,
+        train_medians    = train_medians,
+    )
+    # ── END Step 8b ───────────────────────────────────────────────────────
+    # ── Step 9: Persist model artifact ───────────────────────────────────
+>>>>>>> Stashed changes
     meta = {
         "version": model_version_str(),
         "target": "next_hotspot = next_total >= 2",

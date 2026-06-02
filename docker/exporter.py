@@ -85,6 +85,7 @@ def sql_crimes(days_back: int) -> str:
             precipitation,
             crime_density_7d,
             crime_density_30d,
+            arrest,
             hardship_index,
             unemployment_rate
         FROM `{PROJECT_ID}.{BQ_DATASET}.enriched_crime_data`

@@ -1,0 +1,92 @@
+[2026-05-31T10:40:57.162+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-31T09:04:32.281251+00:00 [queued]>
+[2026-05-31T10:40:57.171+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-31T09:04:32.281251+00:00 [queued]>
+[2026-05-31T10:40:57.171+0000] {taskinstance.py:2170} INFO - Starting attempt 14 of 15
+[2026-05-31T10:40:57.183+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-31 09:04:32.281251+00:00
+[2026-05-31T10:40:57.192+0000] {standard_task_runner.py:60} INFO - Started process 3973 to run task
+[2026-05-31T10:40:57.195+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-05-31T09:04:32.281251+00:00', '--job-id', '364', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp684qugz4']
+[2026-05-31T10:40:57.199+0000] {standard_task_runner.py:88} INFO - Job 364: Subtask ml_train_and_predict
+[2026-05-31T10:40:57.255+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-05-31T09:04:32.281251+00:00 [running]> on host db8b8170dea9
+[2026-05-31T10:40:57.341+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-31T09:04:32.281251+00:00' AIRFLOW_CTX_TRY_NUMBER='14' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-05-31T09:04:32.281251+00:00'
+[2026-05-31T10:40:58.039+0000] {ml_pipeline.py:1230} INFO - ========================================================================
+[2026-05-31T10:40:58.040+0000] {ml_pipeline.py:1231} INFO -   Chicago Crime Hotspot Forecasting  –  ml_pipeline v14 [OOM-FIX]
+[2026-05-31T10:40:58.040+0000] {ml_pipeline.py:1232} INFO - ========================================================================
+[2026-05-31T10:40:58.041+0000] {ml_pipeline.py:1235} INFO -   Model version: 2026-05-31.crime_prob_v14_precision
+[2026-05-31T10:40:58.042+0000] {ml_pipeline.py:143} INFO - [RAM] start – RSS peak: 249 MB
+[2026-05-31T10:41:00.195+0000] {ml_pipeline.py:1243} INFO - [ML] Lag correction: 77 areas, mean_factor=1.000
+[2026-05-31T10:41:00.198+0000] {ml_pipeline.py:302} INFO - [ML] Loading enriched_crime_data (last 420 days)...
+[2026-05-31T10:41:07.985+0000] {ml_pipeline.py:360} INFO - [ML] Loaded 261277 rows, date range: 2025-04-06 → 2026-05-18
+[2026-05-31T10:41:07.986+0000] {ml_pipeline.py:143} INFO - [RAM] after load_enriched_data – RSS peak: 461 MB
+[2026-05-31T10:41:07.987+0000] {ml_pipeline.py:371} INFO - [ML] Aggregating daily per H3...
+[2026-05-31T10:41:21.333+0000] {ml_pipeline.py:441} INFO - [ML] Daily grid: 2,031,024 rows, 4978 H3 cells, 408 dates
+[2026-05-31T10:41:21.333+0000] {ml_pipeline.py:143} INFO - [RAM] after aggregate_daily – RSS peak: 1141 MB
+[2026-05-31T10:41:21.615+0000] {ml_pipeline.py:463} INFO - [ML] H3 neighbors built. Avg ring-1: 5.5
+[2026-05-31T10:41:22.132+0000] {ml_pipeline.py:1265} INFO - [ML] lag_buffer_days=5: 347 eligible dates
+[2026-05-31T10:41:22.143+0000] {ml_pipeline.py:1280} INFO - [ML] Split Train: 2025-06-24→2026-04-19 (300 d)  Val: 2026-05-04→2026-05-10  Test: 2026-05-11→2026-05-17
+[2026-05-31T10:41:22.892+0000] {ml_pipeline.py:572} INFO - [ML]   [4A] Own-cell lag/rolling features (trimmed windows)
+[2026-05-31T10:41:48.023+0000] {ml_pipeline.py:598} INFO - [ML]   [4A] EWM (spans 7/14/30, per-group loop)
+[2026-05-31T10:41:58.736+0000] {ml_pipeline.py:143} INFO - [RAM] after 4A – RSS peak: 3272 MB
+[2026-05-31T10:41:58.737+0000] {ml_pipeline.py:621} INFO - [ML]   [4B] Burst/streak features
+[2026-05-31T10:41:59.685+0000] {ml_pipeline.py:644} INFO - [ML]   [4C] Crime-type composition (windows 7/14)
+[2026-05-31T10:42:06.854+0000] {ml_pipeline.py:664} INFO - [ML]   [4D] Weather/context features
+[2026-05-31T10:42:10.079+0000] {ml_pipeline.py:680} INFO - [ML]   [4E] Community-level features
+[2026-05-31T10:42:13.173+0000] {ml_pipeline.py:143} INFO - [RAM] after 4E – RSS peak: 6372 MB
+[2026-05-31T10:42:13.174+0000] {ml_pipeline.py:719} INFO - [ML]   [4F] City-level features
+[2026-05-31T10:42:15.068+0000] {ml_pipeline.py:143} INFO - [RAM] after 4F – RSS peak: 8441 MB
+[2026-05-31T10:42:15.068+0000] {ml_pipeline.py:751} INFO - [ML]   [4G] H3 spatial spillover (one-at-a-time, RAM-safe)
+[2026-05-31T10:42:15.182+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r1_mean ...
+[2026-05-31T10:42:20.172+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r1_mean – RSS peak: 8451 MB
+[2026-05-31T10:42:20.173+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r1_sum ...
+[2026-05-31T10:42:25.406+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r1_sum – RSS peak: 8476 MB
+[2026-05-31T10:42:25.407+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r1_max ...
+[2026-05-31T10:42:30.421+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r1_max – RSS peak: 8491 MB
+[2026-05-31T10:42:30.422+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r1_std ...
+[2026-05-31T10:42:35.668+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r1_std – RSS peak: 8522 MB
+[2026-05-31T10:42:35.669+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r2_mean ...
+[2026-05-31T10:42:41.601+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r2_mean – RSS peak: 8538 MB
+[2026-05-31T10:42:41.605+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r1_roll7 ...
+[2026-05-31T10:42:47.824+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r1_roll7 – RSS peak: 8585 MB
+[2026-05-31T10:42:47.825+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r1_active_rate ...
+[2026-05-31T10:42:53.107+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r1_active_rate – RSS peak: 8600 MB
+[2026-05-31T10:42:53.108+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r1_active_count ...
+[2026-05-31T10:42:58.150+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r1_active_count – RSS peak: 8631 MB
+[2026-05-31T10:42:58.151+0000] {ml_pipeline.py:782} INFO - [ML]     computing nbr_r1_any_active ...
+[2026-05-31T10:43:03.397+0000] {ml_pipeline.py:143} INFO - [RAM] after nbr nbr_r1_any_active – RSS peak: 8654 MB
+[2026-05-31T10:43:04.378+0000] {ml_pipeline.py:816} INFO - [ML]     ✓ Spatial spillover features added
+[2026-05-31T10:43:04.379+0000] {ml_pipeline.py:143} INFO - [RAM] after 4G – RSS peak: 8654 MB
+[2026-05-31T10:43:04.379+0000] {ml_pipeline.py:832} INFO - [ML]   [4H] Train-only spatial priors
+[2026-05-31T10:43:08.815+0000] {ml_pipeline.py:143} INFO - [RAM] after 4H – RSS peak: 10434 MB
+[2026-05-31T10:43:08.816+0000] {ml_pipeline.py:873} INFO - [ML]   [4I] Near-repeat victimization
+[2026-05-31T10:43:08.911+0000] {ml_pipeline.py:889} INFO - [ML]   [4J] Cross-crime lead-lag
+[2026-05-31T10:43:08.939+0000] {ml_pipeline.py:898} INFO - [ML]   [4K] Arrest deterrence
+[2026-05-31T10:43:10.851+0000] {ml_pipeline.py:912} INFO - [ML]   [4L] Density-normalized crime
+[2026-05-31T10:43:10.878+0000] {ml_pipeline.py:923} INFO - [ML]   [4M] Holiday/event features
+[2026-05-31T10:43:31.939+0000] {ml_pipeline.py:929} INFO - [ML]   [4N] Momentum and trend direction
+[2026-05-31T10:43:40.211+0000] {ml_pipeline.py:942} INFO - [ML]   [4O] Hardship interaction
+[2026-05-31T10:43:40.257+0000] {ml_pipeline.py:954} INFO - [ML]   [4P] Prior-relative features
+[2026-05-31T10:43:40.404+0000] {ml_pipeline.py:965} INFO - [ML] Feature engineering done. Shape: (2031024, 241)
+[2026-05-31T10:43:40.405+0000] {ml_pipeline.py:143} INFO - [RAM] after build_features – RSS peak: 10928 MB
+[2026-05-31T10:43:42.505+0000] {ml_pipeline.py:1002} INFO - [ML] Preparing train/calib/val/test splits...
+[2026-05-31T10:43:55.511+0000] {ml_pipeline.py:1068} INFO - [ML] Train=1493400 Calib=69692 Val=34846 Test=34846 features=227 | spw=3.22 (power=0.55)
+[2026-05-31T10:44:01.586+0000] {logging_mixin.py:188} INFO - [0]	validation_0-aucpr:0.30268	validation_1-aucpr:0.28841
+[2026-05-31T10:45:29.014+0000] {logging_mixin.py:188} INFO - [183]	validation_0-aucpr:0.31691	validation_1-aucpr:0.29928
+[2026-05-31T10:45:29.177+0000] {ml_pipeline.py:143} INFO - [RAM] after XGBoost training – RSS peak: 10928 MB
+[2026-05-31T10:45:30.221+0000] {ml_pipeline.py:978} INFO - [ML] Platt calibrator: coef=5.9224 intercept=-4.3907
+[2026-05-31T10:45:55.125+0000] {ml_pipeline.py:1096} INFO - [ML] Threshold=0.20 | F1_CALIB=0.3430
+[2026-05-31T10:45:55.870+0000] {ml_pipeline.py:1115} INFO - [ML] VAL  P=0.3089 R=0.4172 F1=0.3550 AUC=0.7717 AP=0.3125 rate=0.147
+[2026-05-31T10:45:55.871+0000] {ml_pipeline.py:1118} INFO - [ML] TEST P=0.2662 R=0.4182 F1=0.3253 AUC=0.7655 AP=0.2681 rate=0.145
+[2026-05-31T10:45:55.902+0000] {ml_pipeline.py:1141} INFO - [ML] Predict day: 2026-05-18 → 2026-05-19 (4978 cells)
+[2026-05-31T10:45:56.390+0000] {ml_pipeline.py:1194} INFO - [ML] Writing 4978 predictions → sage-mind-489618-n5.cdash_warehouse.prediction_results (mode=WRITE_TRUNCATE)
+[2026-05-31T10:46:01.319+0000] {ml_pipeline.py:1211} INFO - [ML] ✓ Predictions written.
+[2026-05-31T10:46:01.371+0000] {ml_pipeline.py:1320} INFO - [ML] Artifact saved → /tmp/crime_model_v14.pkl
+[2026-05-31T10:46:01.372+0000] {ml_pipeline.py:1322} INFO - ========================================================================
+[2026-05-31T10:46:01.373+0000] {ml_pipeline.py:1323} INFO -   SUMMARY v14 OOM-FIX
+[2026-05-31T10:46:01.373+0000] {ml_pipeline.py:1324} INFO -   VAL  AUC=0.7717 F1=0.3550 P=0.3089 R=0.4172 AP=0.3125
+[2026-05-31T10:46:01.374+0000] {ml_pipeline.py:1327} INFO -   TEST AUC=0.7655 F1=0.3253 P=0.2662 R=0.4182 AP=0.2681
+[2026-05-31T10:46:01.374+0000] {ml_pipeline.py:1330} INFO -   Threshold=0.20 | pred_rate_test=14.5% | Predictions=4978
+[2026-05-31T10:46:01.374+0000] {ml_pipeline.py:1332} INFO - ========================================================================
+[2026-05-31T10:46:01.375+0000] {ml_pipeline.py:143} INFO - [RAM] end – RSS peak: 10928 MB
+[2026-05-31T10:46:01.481+0000] {dag_crime_pipeline.py:441} WARNING - [ML] ⚠️ Model chưa đạt ngưỡng: val_auc=0.7717 val_f1=0.3550
+[2026-05-31T10:46:01.482+0000] {python.py:201} INFO - Done. Returned value was: {'val_auc': 0.771697155173884, 'val_f1': 0.3549910071942446, 'val_precision': 0.30894149872823323, 'test_auc': 0.7655125121351416, 'test_f1': 0.3252997456703403, 'test_precision': 0.26615140705509316, 'threshold': 0.2, 'n_predictions': 4978, 'model_version': '2026-05-31.crime_prob_v14_precision'}
+[2026-05-31T10:46:01.514+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260531T090432, start_date=20260531T104057, end_date=20260531T104601
+[2026-05-31T10:46:01.818+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-05-31T10:46:01.855+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

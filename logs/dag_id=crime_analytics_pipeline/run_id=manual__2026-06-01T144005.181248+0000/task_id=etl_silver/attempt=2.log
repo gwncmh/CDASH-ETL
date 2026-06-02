@@ -1,0 +1,141 @@
+[2026-06-01T14:59:43.859+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_silver manual__2026-06-01T14:40:05.181248+00:00 [queued]>
+[2026-06-01T14:59:43.867+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_silver manual__2026-06-01T14:40:05.181248+00:00 [queued]>
+[2026-06-01T14:59:43.868+0000] {taskinstance.py:2170} INFO - Starting attempt 2 of 3
+[2026-06-01T14:59:43.880+0000] {taskinstance.py:2191} INFO - Executing <Task(DataprocSubmitJobOperator): etl_silver> on 2026-06-01 14:40:05.181248+00:00
+[2026-06-01T14:59:43.888+0000] {standard_task_runner.py:60} INFO - Started process 990 to run task
+[2026-06-01T14:59:43.892+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'etl_silver', 'manual__2026-06-01T14:40:05.181248+00:00', '--job-id', '398', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp9_ri0_o0']
+[2026-06-01T14:59:43.896+0000] {standard_task_runner.py:88} INFO - Job 398: Subtask etl_silver
+[2026-06-01T14:59:43.962+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.etl_silver manual__2026-06-01T14:40:05.181248+00:00 [running]> on host db8b8170dea9
+[2026-06-01T14:59:44.056+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='etl_silver' AIRFLOW_CTX_EXECUTION_DATE='2026-06-01T14:40:05.181248+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-01T14:40:05.181248+00:00'
+[2026-06-01T14:59:44.060+0000] {dataproc.py:2208} INFO - Submitting job
+[2026-06-01T14:59:44.071+0000] {connection.py:234} WARNING - Connection schemes (type: google_cloud_platform) shall not contain '_' according to RFC3986.
+[2026-06-01T14:59:44.073+0000] {base.py:83} INFO - Using connection ID 'google_cloud_default' for task execution.
+[2026-06-01T14:59:45.675+0000] {dataproc.py:2220} INFO - Job ff0a6944-d6e9-45d0-a0a3-7f61c1797c69 submitted successfully.
+[2026-06-01T14:59:45.713+0000] {dataproc.py:2254} INFO - Waiting for job ff0a6944-d6e9-45d0-a0a3-7f61c1797c69 to complete
+[2026-06-01T15:00:09.115+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 2255, in execute
+    self.hook.wait_for_job(
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 477, in inner_wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 724, in wait_for_job
+    raise AirflowException(f"Job failed:\n{job}")
+airflow.exceptions.AirflowException: Job failed:
+reference {
+  project_id: "sage-mind-489618-n5"
+  job_id: "ff0a6944-d6e9-45d0-a0a3-7f61c1797c69"
+}
+placement {
+  cluster_name: "crime-etl-cluster"
+  cluster_uuid: "66ec93e7-2972-49a4-b487-43ccb0c5c4bc"
+}
+pyspark_job {
+  main_python_file_uri: "gs://chicago-crime-raw-group15/scripts/stage3_silver_main.py"
+  args: "--project=sage-mind-489618-n5"
+  args: "--bronze_path=gs://chicago-crime-raw-group15/bronze/chicago_crime"
+  args: "--silver_path=gs://chicago-crime-raw-group15/silver/chicago_crime"
+  args: "--ds=2026-06-01"
+  python_file_uris: "gs://chicago-crime-raw-group15/scripts/utils.zip"
+  python_file_uris: "gs://chicago-crime-raw-group15/scripts/stage3_silver.zip"
+  properties {
+    key: "spark.jars.packages"
+    value: "com.google.cloud.spark:spark-bigquery-with-dependencies_2.12:0.32.2"
+  }
+}
+status {
+  state: ERROR
+  details: "Job failed with message [NameError: name \'TRUE\' is not defined. Did you mean: \'True\'?]. Additional details can be found at:\nhttps://console.cloud.google.com/dataproc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69?project=sage-mind-489618-n5&region=us-central1\ngcloud dataproc jobs wait \'ff0a6944-d6e9-45d0-a0a3-7f61c1797c69\' --region \'us-central1\' --project \'sage-mind-489618-n5\'\nhttps://console.cloud.google.com/storage/browser/dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/66ec93e7-2972-49a4-b487-43ccb0c5c4bc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69/\ngs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/66ec93e7-2972-49a4-b487-43ccb0c5c4bc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69/driveroutput.*"
+  state_start_time {
+    seconds: 1780326005
+    nanos: 493195000
+  }
+}
+status_history {
+  state: PENDING
+  state_start_time {
+    seconds: 1780325985
+    nanos: 701907000
+  }
+}
+status_history {
+  state: SETUP_DONE
+  state_start_time {
+    seconds: 1780325985
+    nanos: 741694000
+  }
+}
+status_history {
+  state: RUNNING
+  state_start_time {
+    seconds: 1780325986
+    nanos: 106408000
+  }
+}
+driver_output_resource_uri: "gs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/66ec93e7-2972-49a4-b487-43ccb0c5c4bc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69/driveroutput"
+driver_control_files_uri: "gs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/66ec93e7-2972-49a4-b487-43ccb0c5c4bc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69/"
+job_uuid: "ff0a6944-d6e9-45d0-a0a3-7f61c1797c69"
+done: true
+
+[2026-06-01T15:00:09.121+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=etl_silver, execution_date=20260601T144005, start_date=20260601T145943, end_date=20260601T150009
+[2026-06-01T15:00:09.152+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 398 for task etl_silver (Job failed:
+reference {
+  project_id: "sage-mind-489618-n5"
+  job_id: "ff0a6944-d6e9-45d0-a0a3-7f61c1797c69"
+}
+placement {
+  cluster_name: "crime-etl-cluster"
+  cluster_uuid: "66ec93e7-2972-49a4-b487-43ccb0c5c4bc"
+}
+pyspark_job {
+  main_python_file_uri: "gs://chicago-crime-raw-group15/scripts/stage3_silver_main.py"
+  args: "--project=sage-mind-489618-n5"
+  args: "--bronze_path=gs://chicago-crime-raw-group15/bronze/chicago_crime"
+  args: "--silver_path=gs://chicago-crime-raw-group15/silver/chicago_crime"
+  args: "--ds=2026-06-01"
+  python_file_uris: "gs://chicago-crime-raw-group15/scripts/utils.zip"
+  python_file_uris: "gs://chicago-crime-raw-group15/scripts/stage3_silver.zip"
+  properties {
+    key: "spark.jars.packages"
+    value: "com.google.cloud.spark:spark-bigquery-with-dependencies_2.12:0.32.2"
+  }
+}
+status {
+  state: ERROR
+  details: "Job failed with message [NameError: name \'TRUE\' is not defined. Did you mean: \'True\'?]. Additional details can be found at:\nhttps://console.cloud.google.com/dataproc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69?project=sage-mind-489618-n5&region=us-central1\ngcloud dataproc jobs wait \'ff0a6944-d6e9-45d0-a0a3-7f61c1797c69\' --region \'us-central1\' --project \'sage-mind-489618-n5\'\nhttps://console.cloud.google.com/storage/browser/dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/66ec93e7-2972-49a4-b487-43ccb0c5c4bc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69/\ngs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/66ec93e7-2972-49a4-b487-43ccb0c5c4bc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69/driveroutput.*"
+  state_start_time {
+    seconds: 1780326005
+    nanos: 493195000
+  }
+}
+status_history {
+  state: PENDING
+  state_start_time {
+    seconds: 1780325985
+    nanos: 701907000
+  }
+}
+status_history {
+  state: SETUP_DONE
+  state_start_time {
+    seconds: 1780325985
+    nanos: 741694000
+  }
+}
+status_history {
+  state: RUNNING
+  state_start_time {
+    seconds: 1780325986
+    nanos: 106408000
+  }
+}
+driver_output_resource_uri: "gs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/66ec93e7-2972-49a4-b487-43ccb0c5c4bc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69/driveroutput"
+driver_control_files_uri: "gs://dataproc-staging-us-central1-47706975998-p2ulnh4c/google-cloud-dataproc-metainfo/66ec93e7-2972-49a4-b487-43ccb0c5c4bc/jobs/ff0a6944-d6e9-45d0-a0a3-7f61c1797c69/"
+job_uuid: "ff0a6944-d6e9-45d0-a0a3-7f61c1797c69"
+done: true
+; 990)
+[2026-06-01T15:00:09.213+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-06-01T15:00:09.243+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

@@ -21,12 +21,10 @@ project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from src import (
-    calculate_rolling_features,
-    process_weather_data,
-    clean_socio_data,
-    process_poi_data,
-)
+from crime_aggregator import calculate_rolling_features
+from weather_process import process_weather_data
+from socio_process import clean_socio_data
+from poi_process import process_poi_data
 from utils.logger import get_logger
 
 logger = get_logger("Stage4_Gold_Main")
@@ -267,6 +265,7 @@ def main():
                 COALESCE(CAST(c.crime_density_7d       AS DOUBLE), 0.0)  AS crime_density_7d,
                 COALESCE(CAST(c.crime_density_30d      AS DOUBLE), 0.0)  AS crime_density_30d,
                 COALESCE(CAST(c.arrest_rate            AS DOUBLE), 0.0)  AS arrest_rate,
+                c.arrest,
 
                 -- [FIX-2] Kinh tế - xã hội: thêm per_capita_income mà ML pipeline cần
                 -- [FIX-5] COALESCE tránh NULL

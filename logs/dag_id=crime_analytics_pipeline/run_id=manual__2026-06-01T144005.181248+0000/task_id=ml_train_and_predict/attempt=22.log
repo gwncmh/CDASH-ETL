@@ -1,0 +1,120 @@
+[2026-06-01T22:27:56.024+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-01T14:40:05.181248+00:00 [queued]>
+[2026-06-01T22:27:56.034+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-01T14:40:05.181248+00:00 [queued]>
+[2026-06-01T22:27:56.034+0000] {taskinstance.py:2170} INFO - Starting attempt 22 of 22
+[2026-06-01T22:27:56.050+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-06-01 14:40:05.181248+00:00
+[2026-06-01T22:27:56.059+0000] {standard_task_runner.py:60} INFO - Started process 7198 to run task
+[2026-06-01T22:27:56.063+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-06-01T14:40:05.181248+00:00', '--job-id', '455', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmptbqej7tw']
+[2026-06-01T22:27:56.067+0000] {standard_task_runner.py:88} INFO - Job 455: Subtask ml_train_and_predict
+[2026-06-01T22:27:56.145+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-01T14:40:05.181248+00:00 [running]> on host db8b8170dea9
+[2026-06-01T22:27:57.323+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-06-01T14:40:05.181248+00:00' AIRFLOW_CTX_TRY_NUMBER='22' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-01T14:40:05.181248+00:00'
+[2026-06-01T22:27:58.109+0000] {ml_pipeline.py:1761} INFO - ========================================================================
+[2026-06-01T22:27:58.110+0000] {ml_pipeline.py:1762} INFO -   Chicago Crime Hotspot Forecasting  –  ml_pipeline v13 dynamic-spatial
+[2026-06-01T22:27:58.111+0000] {ml_pipeline.py:1763} INFO -   Target: next_has_crime = (next_total >= 2) | schema OK
+[2026-06-01T22:27:58.111+0000] {ml_pipeline.py:1764} INFO - ========================================================================
+[2026-06-01T22:27:58.164+0000] {ml_pipeline.py:318} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-06-01T22:28:06.007+0000] {ml_pipeline.py:380} INFO - [ML] Loaded 247690 rows, date range: 2025-04-27 → 2026-05-18
+[2026-06-01T22:28:06.017+0000] {ml_pipeline.py:1780} INFO - [ML] Target prediction month=5, seasonal months=[4, 5, 6, 7, 8]
+[2026-06-01T22:28:06.018+0000] {ml_pipeline.py:405} INFO - [ML] Loading seasonal data: months=4,5,6,7,8, years=2020-2025...
+[2026-06-01T22:28:13.644+0000] {ml_pipeline.py:465} INFO - [ML] Seasonal data loaded: 605923 rows, 918 unique dates
+[2026-06-01T22:28:14.279+0000] {ml_pipeline.py:1796} INFO - [ML] Combined: recent=247690 + seasonal=605923 → total=668185 rows
+[2026-06-01T22:28:14.284+0000] {ml_pipeline.py:481} INFO - [ML] Aggregating daily per H3...
+[2026-06-01T22:28:22.886+0000] {ml_pipeline.py:569} INFO - [ML] Daily grid: 1,959,125 rows, 875 H3 cells, 2239 dates | RAM-safe downcast done
+[2026-06-01T22:28:22.964+0000] {ml_pipeline.py:1809} INFO - [DEBUG] Recent daily grid (2025-04-27→): 338625 rows
+[2026-06-01T22:28:22.964+0000] {ml_pipeline.py:1810} INFO - [DEBUG] total_crimes=0 : 60.11%
+[2026-06-01T22:28:22.965+0000] {ml_pipeline.py:1811} INFO - [DEBUG] total_crimes>=1: 39.89%
+[2026-06-01T22:28:22.965+0000] {ml_pipeline.py:1812} INFO - [DEBUG] total_crimes>=2: 15.74%
+[2026-06-01T22:28:22.969+0000] {ml_pipeline.py:1813} INFO - [DEBUG] total_crimes distribution:
+total_crimes
+0.0    203558
+1.0     81772
+2.0     34790
+3.0     12733
+4.0      3964
+5.0      1266
+6.0       390
+7.0       109
+8.0        32
+9.0         8
+[2026-06-01T22:28:22.979+0000] {ml_pipeline.py:1819} INFO - [DEBUG] Unique dates in daily grid: 2239
+[2026-06-01T22:28:22.984+0000] {ml_pipeline.py:1820} INFO - [DEBUG] Date range: 2020-04-01 → 2026-05-18
+[2026-06-01T22:28:23.025+0000] {ml_pipeline.py:593} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.4
+[2026-06-01T22:28:23.358+0000] {ml_pipeline.py:1847} INFO - [ML] Split  Train: 2025-08-29→2026-04-05 (220 d)  Val: 2026-04-27→2026-05-03  Test: 2026-05-04→2026-05-17
+[2026-06-01T22:28:23.701+0000] {ml_pipeline.py:629} INFO - [ML]   [4A] Orthogonal temporal features (v14)
+[2026-06-01T22:28:36.666+0000] {ml_pipeline.py:725} INFO - [ML]   [4B] Burst/streak features
+[2026-06-01T22:28:37.534+0000] {ml_pipeline.py:750} INFO - [ML]   [4C] Crime-type composition
+[2026-06-01T22:28:50.203+0000] {ml_pipeline.py:767} INFO - [ML]   [4D] Weather/context features
+[2026-06-01T22:28:53.845+0000] {ml_pipeline.py:782} INFO - [ML]   [4E] Community-level features
+[2026-06-01T22:28:57.320+0000] {ml_pipeline.py:829} INFO - [ML]   [4F] City-level features
+[2026-06-01T22:29:01.499+0000] {ml_pipeline.py:863} INFO - [ML]   [4G] H3 spatial spillover v13 dynamic-spatial
+[2026-06-01T22:29:03.017+0000] {ml_pipeline.py:931} INFO - [ML]     computing nbr_r1 mean/sum/max/std/active-count + r2 + roll7 ...
+[2026-06-01T22:29:06.636+0000] {ml_pipeline.py:995} INFO - [ML]     ✓ Spatial spillover features added, single-merge RAM-safe
+[2026-06-01T22:29:06.641+0000] {ml_pipeline.py:1010} INFO - [ML]   [4H] Train-only spatial priors
+[2026-06-01T22:29:10.233+0000] {ml_pipeline.py:1060} INFO - [ML]   [4I] Near-repeat victimization (Near-Repeat Theory)
+[2026-06-01T22:29:10.378+0000] {ml_pipeline.py:1073} INFO - [ML]   [4J] Cross-crime lead-lag (Escalation Theory)
+[2026-06-01T22:29:10.424+0000] {ml_pipeline.py:1086} INFO - [ML]   [4K] Arrest deterrence (Deterrence Theory)
+[2026-06-01T22:29:11.724+0000] {local_task_job_runner.py:302} WARNING - State of this instance has been externally set to restarting. Terminating instance.
+[2026-06-01T22:29:11.735+0000] {process_utils.py:131} INFO - Sending 15 to group 7198. PIDs of all processes in the group: [7198]
+[2026-06-01T22:29:11.736+0000] {process_utils.py:86} INFO - Sending the signal 15 to group 7198
+[2026-06-01T22:29:11.765+0000] {taskinstance.py:2450} ERROR - Received SIGTERM. Terminating subprocesses.
+[2026-06-01T22:29:11.781+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/dag_crime_pipeline.py", line 298, in _run_ml_pipeline
+    result = train_and_predict(
+             ^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1853, in train_and_predict
+    # Add target
+              ^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1097, in build_features
+    .rolling(30, min_periods=2).sum()
+                                ^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/window/rolling.py", line 2121, in sum
+    return super().sum(
+           ^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/window/rolling.py", line 1554, in sum
+    return self._apply(window_func, name="sum", numeric_only=numeric_only)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/window/rolling.py", line 761, in _apply
+    idx = MultiIndex.from_arrays([idx])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/indexes/multi.py", line 531, in from_arrays
+    codes, levels = factorize_from_iterables(arrays)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/arrays/categorical.py", line 3023, in factorize_from_iterables
+    codes, categories = zip(*(factorize_from_iterable(it) for it in iterables))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/arrays/categorical.py", line 3023, in <genexpr>
+    codes, categories = zip(*(factorize_from_iterable(it) for it in iterables))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/arrays/categorical.py", line 2996, in factorize_from_iterable
+    cat = Categorical(values, ordered=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/arrays/categorical.py", line 449, in __init__
+    codes, categories = factorize(values, sort=True)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/algorithms.py", line 763, in factorize
+    return values.factorize(sort=sort, use_na_sentinel=use_na_sentinel)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/base.py", line 1195, in factorize
+    codes, uniques = algorithms.factorize(
+                     ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/algorithms.py", line 802, in factorize
+    uniques, codes = safe_sort(
+                     ^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/pandas/core/algorithms.py", line 1596, in safe_sort
+    sorter = values.argsort()
+             ^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 2452, in signal_handler
+    raise AirflowException("Task received SIGTERM signal")
+airflow.exceptions.AirflowException: Task received SIGTERM signal
+[2026-06-01T22:29:11.820+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260601T144005, start_date=20260601T222756, end_date=20260601T222911
+[2026-06-01T22:29:11.833+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 455 for task ml_train_and_predict (Task received SIGTERM signal; 7198)
+[2026-06-01T22:29:12.151+0000] {process_utils.py:79} INFO - Process psutil.Process(pid=7198, status='terminated', exitcode=1, started='22:27:55') (7198) terminated with exit code 1

@@ -5,7 +5,7 @@ from pyspark.sql.functions import col, min, when, pandas_udf
 from pyspark.sql.types import StringType
 
 # ĐỒNG BỘ ĐỘ PHÂN GIẢI VỚI STAGE 3 (Bắt buộc)
-H3_RESOLUTION = 9  
+H3_RESOLUTION = 8  
 
 # Sử dụng Vectorized UDF (Arrow) giống hệt Stage 3 để tối ưu tốc độ
 @pandas_udf(StringType())

@@ -1,0 +1,337 @@
+[2026-06-01T21:57:05.279+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-01T14:40:05.181248+00:00 [queued]>
+[2026-06-01T21:57:05.287+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-01T14:40:05.181248+00:00 [queued]>
+[2026-06-01T21:57:05.288+0000] {taskinstance.py:2170} INFO - Starting attempt 18 of 19
+[2026-06-01T21:57:05.300+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-06-01 14:40:05.181248+00:00
+[2026-06-01T21:57:05.309+0000] {standard_task_runner.py:60} INFO - Started process 6470 to run task
+[2026-06-01T21:57:05.314+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-06-01T14:40:05.181248+00:00', '--job-id', '445', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpxhnkkotj']
+[2026-06-01T21:57:05.318+0000] {standard_task_runner.py:88} INFO - Job 445: Subtask ml_train_and_predict
+[2026-06-01T21:57:05.394+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-01T14:40:05.181248+00:00 [running]> on host db8b8170dea9
+[2026-06-01T21:57:05.505+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-06-01T14:40:05.181248+00:00' AIRFLOW_CTX_TRY_NUMBER='18' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-01T14:40:05.181248+00:00'
+[2026-06-01T21:57:06.371+0000] {ml_pipeline.py:1729} INFO - ========================================================================
+[2026-06-01T21:57:06.371+0000] {ml_pipeline.py:1730} INFO -   Chicago Crime Hotspot Forecasting  –  ml_pipeline v13 dynamic-spatial
+[2026-06-01T21:57:06.372+0000] {ml_pipeline.py:1731} INFO -   Target: next_has_crime = (next_total >= 2) | schema OK
+[2026-06-01T21:57:06.372+0000] {ml_pipeline.py:1732} INFO - ========================================================================
+[2026-06-01T21:57:06.421+0000] {ml_pipeline.py:318} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-06-01T21:57:15.792+0000] {ml_pipeline.py:380} INFO - [ML] Loaded 247690 rows, date range: 2025-04-27 → 2026-05-18
+[2026-06-01T21:57:15.803+0000] {ml_pipeline.py:1748} INFO - [ML] Target prediction month=5, seasonal months=[4, 5, 6, 7, 8]
+[2026-06-01T21:57:15.804+0000] {ml_pipeline.py:405} INFO - [ML] Loading seasonal data: months=4,5,6,7,8, years=2020-2025...
+[2026-06-01T21:57:22.965+0000] {ml_pipeline.py:465} INFO - [ML] Seasonal data loaded: 605923 rows, 918 unique dates
+[2026-06-01T21:57:23.563+0000] {ml_pipeline.py:1764} INFO - [ML] Combined: recent=247690 + seasonal=605923 → total=668185 rows
+[2026-06-01T21:57:23.571+0000] {ml_pipeline.py:481} INFO - [ML] Aggregating daily per H3...
+[2026-06-01T21:57:30.443+0000] {ml_pipeline.py:553} INFO - [ML] Daily grid: 1,959,125 rows, 875 H3 cells, 2239 dates | RAM-safe downcast done
+[2026-06-01T21:57:30.492+0000] {ml_pipeline.py:577} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.4
+[2026-06-01T21:57:31.005+0000] {ml_pipeline.py:1797} INFO - [ML] Split  Train: 2025-08-29→2026-04-05 (220 d)  Val: 2026-04-27→2026-05-03  Test: 2026-05-04→2026-05-17
+[2026-06-01T21:57:31.460+0000] {ml_pipeline.py:613} INFO - [ML]   [4A] Orthogonal temporal features (v14)
+[2026-06-01T21:57:48.079+0000] {ml_pipeline.py:709} INFO - [ML]   [4B] Burst/streak features
+[2026-06-01T21:57:48.838+0000] {ml_pipeline.py:734} INFO - [ML]   [4C] Crime-type composition
+[2026-06-01T21:57:59.976+0000] {ml_pipeline.py:751} INFO - [ML]   [4D] Weather/context features
+[2026-06-01T21:58:03.162+0000] {ml_pipeline.py:766} INFO - [ML]   [4E] Community-level features
+[2026-06-01T21:58:06.486+0000] {ml_pipeline.py:813} INFO - [ML]   [4F] City-level features
+[2026-06-01T21:58:08.933+0000] {ml_pipeline.py:847} INFO - [ML]   [4G] H3 spatial spillover v13 dynamic-spatial
+[2026-06-01T21:58:10.333+0000] {ml_pipeline.py:915} INFO - [ML]     computing nbr_r1 mean/sum/max/std/active-count + r2 + roll7 ...
+[2026-06-01T21:58:14.091+0000] {ml_pipeline.py:979} INFO - [ML]     ✓ Spatial spillover features added, single-merge RAM-safe
+[2026-06-01T21:58:14.092+0000] {ml_pipeline.py:994} INFO - [ML]   [4H] Train-only spatial priors
+[2026-06-01T21:58:19.542+0000] {ml_pipeline.py:1044} INFO - [ML]   [4I] Near-repeat victimization (Near-Repeat Theory)
+[2026-06-01T21:58:19.648+0000] {ml_pipeline.py:1057} INFO - [ML]   [4J] Cross-crime lead-lag (Escalation Theory)
+[2026-06-01T21:58:19.687+0000] {ml_pipeline.py:1070} INFO - [ML]   [4K] Arrest deterrence (Deterrence Theory)
+[2026-06-01T21:58:21.510+0000] {ml_pipeline.py:1096} INFO - [ML]   [4L] Density-normalized crime
+[2026-06-01T21:58:21.546+0000] {ml_pipeline.py:1113} INFO - [ML]   [4M] Holiday/event features (Routine Activity Theory)
+[2026-06-01T21:58:41.709+0000] {ml_pipeline.py:1123} INFO - [ML]   [4N] Momentum and trend direction
+[2026-06-01T21:58:44.612+0000] {ml_pipeline.py:1145} INFO - [ML]   [4O] Hardship interaction (Social Disorganization Theory)
+[2026-06-01T21:58:44.636+0000] {ml_pipeline.py:1161} INFO - [ML]   [4P] Prior-relative features
+[2026-06-01T21:58:44.679+0000] {ml_pipeline.py:1181} INFO - [ML] Feature engineering done. Shape: (1959125, 269)
+[2026-06-01T21:58:45.533+0000] {ml_pipeline.py:1362} INFO - [ML] Preparing train/calib/val/test splits...
+[2026-06-01T21:58:45.601+0000] {ml_pipeline.py:1394} INFO - [ML] Prior de-dup/damping: removed 9 prior feature(s)
+[2026-06-01T21:58:49.324+0000] {ml_pipeline.py:1433} INFO - [ML] Train=192500  Calib=18375  Val=6125  Test=12250  features=249
+[2026-06-01T21:58:49.325+0000] {ml_pipeline.py:1435} INFO - [ML] Dropped const/null=9 | Pos rate train=14.93% | scale_pos_weight raw=5.70 used=3.69 (power=0.75)
+[2026-06-01T21:58:49.327+0000] {ml_pipeline.py:1437} INFO - [ML] Feature groups: spatial_nbr=23 temporal=136 criminology=10
+[2026-06-01T21:58:50.329+0000] {logging_mixin.py:188} INFO - [0]	validation_0-aucpr:0.49120	validation_1-aucpr:0.50285
+[2026-06-01T21:59:06.410+0000] {logging_mixin.py:188} INFO - [200]	validation_0-aucpr:0.52111	validation_1-aucpr:0.52799
+[2026-06-01T21:59:22.201+0000] {logging_mixin.py:188} INFO - [400]	validation_0-aucpr:0.52501	validation_1-aucpr:0.52925
+[2026-06-01T21:59:35.867+0000] {logging_mixin.py:188} INFO - [600]	validation_0-aucpr:0.52826	validation_1-aucpr:0.52956
+[2026-06-01T21:59:48.953+0000] {logging_mixin.py:188} INFO - [794]	validation_0-aucpr:0.53094	validation_1-aucpr:0.52946
+[2026-06-01T21:59:48.973+0000] {ml_pipeline.py:1451} INFO - [ML] Training done. Best iteration: 675
+[2026-06-01T21:59:48.977+0000] {ml_pipeline.py:1480} INFO - [ML][FI/WEIGHT] Top-30 features:
+                   feature  score
+       h3_train_percentile  663.0
+      h3_train_active_rate  453.0
+                    ewm_90  243.0
+              roll_mean_90  182.0
+          h3_vs_comm_prior  179.0
+                    ewm_30  162.0
+               roll_sum_90  161.0
+                   doy_sin  152.0
+                   doy_cos  147.0
+                 dayofyear  140.0
+                    ewm_60  139.0
+ crime_vs_density_expected  130.0
+               roll_std_90  128.0
+          nbr_r1_burst_1_7  122.0
+                crime_z_90  118.0
+           comm_burst_7_30  117.0
+       same_dow_vs_overall  114.0
+           city_total_lag1  113.0
+            active_rate_90  111.0
+               roll_std_45  108.0
+city_property_roll_mean_30  107.0
+      active_rate_vs_train  103.0
+                crime_z_30   99.0
+          comm_active_rate   95.0
+ city_violent_roll_mean_30   92.0
+              nbr_r1_roll7   89.0
+       theft_roll_ratio_30   88.0
+            near_repeat_3d   85.0
+         city_violent_lag1   85.0
+       nbr_r1_active_roll7   84.0
+[2026-06-01T21:59:48.979+0000] {ml_pipeline.py:1480} INFO - [ML][FI/GAIN] Top-30 features:
+              feature       score
+         roll_mean_30 3731.224854
+               ewm_60 3402.089844
+          roll_std_60 2467.018311
+          roll_sum_30 2392.773926
+               ewm_90 1993.159302
+          roll_std_30 1520.521606
+         roll_mean_45 1517.309082
+ h3_train_active_rate 1513.853760
+               ewm_30 1512.316650
+          roll_sum_90 1324.168945
+       active_rate_60 1196.938721
+  h3_train_percentile 1096.642700
+           roll_sum_7 1066.666748
+       active_rate_90 1065.906006
+          roll_mean_5 1038.725220
+          roll_std_90  793.969849
+         roll_mean_60  780.121399
+       active_rate_30  751.150513
+         roll_mean_90  749.051758
+          roll_sum_60  406.408142
+          roll_std_45  296.259308
+          roll_sum_45  215.547989
+     h3_city_share_30  183.458664
+          roll_sum_21  179.397461
+          roll_sum_14  172.170029
+           zero_today  120.848732
+               ewm_14  116.617775
+h3_nbr_joint_activity   96.969414
+          zero_streak   94.164780
+       near_repeat_3d   82.951431
+[2026-06-01T21:59:48.981+0000] {ml_pipeline.py:1480} INFO - [ML][FI/COVER] Top-30 features:
+                   feature        score
+                 is_monday 43893.695312
+              had_crime_2d 38583.679688
+         deterrence_signal 38550.078125
+     nbr_r1_new_activation 38388.824219
+              h3_above_nbr 33669.488281
+    narcotics_roll_ratio_7 31431.519531
+                   dow_sin 31006.654297
+            near_repeat_3d 30573.419922
+                is_violent 29858.775391
+               is_property 29249.490234
+                   dow_cos 29067.453125
+unemployment_x_zero_streak 28784.070312
+                zero_today 28499.927734
+          h3_vs_comm_prior 25422.537109
+                     lag_2 25395.501953
+         days_from_holiday 25154.246094
+   narcotics_roll_ratio_30 24762.490234
+               zero_streak 24552.630859
+              had_crime_3d 24547.296875
+               roll_std_14 23513.257812
+       h3_train_percentile 23109.353516
+                roll_std_7 23015.904297
+         violent_ratio_day 22885.617188
+                    ewm_60 22830.431641
+                    ewm_30 22608.500000
+           days_to_holiday 22263.732422
+                    ewm_90 22202.416016
+     property_lead_violent 21639.230469
+      h3_train_active_rate 21253.113281
+               roll_sum_30 21230.078125
+[2026-06-01T21:59:48.984+0000] {ml_pipeline.py:1525} INFO - [ML][FI/GROUP] Feature group contribution (by GAIN):
+           group        score  pct
+temporal_rolling 30297.531975 95.0
+   spatial_prior  1096.642700  3.4
+           other   217.818146  0.7
+  community_city   183.458664  0.6
+     criminology    82.951431  0.3
+[2026-06-01T21:59:48.985+0000] {ml_pipeline.py:1534} WARNING - [ML][FI] ⚠️  Nhóm 'temporal_rolling' chiếm 95.0% tổng GAIN — nguy cơ model phụ thuộc quá nhiều vào 1 loại feature. Xem xét tăng reg_alpha/reg_lambda hoặc giảm colsample_bytree.
+[2026-06-01T21:59:50.885+0000] {ml_pipeline.py:1553} INFO - [ML] Calibrated threshold guarded: 0.64 | F1_CALIB=0.5159 | calib_base=0.1529
+[2026-06-01T21:59:50.887+0000] {ml_pipeline.py:1557} INFO - [ML] Threshold candidates near best:
+ threshold       f1  pred_rate  guarded_score
+      0.60 0.504599   0.314558       0.501513
+      0.61 0.507477   0.305687       0.507477
+      0.62 0.511127   0.297088       0.511127
+      0.63 0.515032   0.288816       0.515032
+      0.64 0.515927   0.281088       0.515927
+[2026-06-01T21:59:51.049+0000] {ml_pipeline.py:1580} INFO - [ML] VAL  – P=0.4006 R=0.7028 F1=0.5103 AUC=0.8489 AP=0.5049 pred_rate=0.278
+[2026-06-01T21:59:51.050+0000] {ml_pipeline.py:1583} INFO - [ML] TEST – P=0.3780 R=0.7335 F1=0.4989 AUC=0.8527 AP=0.4984 pred_rate=0.283
+[2026-06-01T21:59:51.085+0000] {ml_pipeline.py:1611} INFO - [ML] Feature day: 2026-05-18  →  Prediction day: 2026-05-19  (875 H3 cells)
+[2026-06-01T21:59:52.194+0000] {ml_pipeline.py:1649} INFO - [ML] Predictions – cells=875  predicted_crime=242 (27.7%)
+[2026-06-01T21:59:52.195+0000] {ml_pipeline.py:1653} INFO - [ML] Risk distribution:
+risk_level
+LOW         380
+MEDIUM      213
+HIGH        147
+CRITICAL    135
+[2026-06-01T21:59:52.197+0000] {ml_pipeline.py:1676} INFO - [ML] Writing 875 predictions → sage-mind-489618-n5.cdash_warehouse.prediction_results (mode=WRITE_TRUNCATE)
+[2026-06-01T21:59:55.547+0000] {ml_pipeline.py:1695} INFO - [ML] ✓ Predictions written to BigQuery.
+[2026-06-01T21:59:55.547+0000] {ml_pipeline.py:1204} INFO - ========================================================================
+[2026-06-01T21:59:55.548+0000] {ml_pipeline.py:1205} INFO -   ABLATION STUDY — Feature Group Contribution
+[2026-06-01T21:59:55.548+0000] {ml_pipeline.py:1206} INFO - ========================================================================
+[2026-06-01T22:00:03.430+0000] {ml_pipeline.py:1318} INFO - [ABLATION] 1_temporal_only                     | features=141 | Val AUC=0.8489 AP=0.5035 F1=0.5228 | Test AUC=0.8516 AP=0.4956 F1=0.5076
+[2026-06-01T22:00:07.020+0000] {ml_pipeline.py:1318} INFO - [ABLATION] 2_temporal_spatial                  | features=167 | Val AUC=0.8482 AP=0.5027 F1=0.5161 | Test AUC=0.8523 AP=0.4986 F1=0.5144
+[2026-06-01T22:00:10.482+0000] {ml_pipeline.py:1318} INFO - [ABLATION] 3_temporal_spatial_context          | features=209 | Val AUC=0.8489 AP=0.5049 F1=0.5136 | Test AUC=0.8530 AP=0.4995 F1=0.5138
+[2026-06-01T22:00:14.211+0000] {ml_pipeline.py:1318} INFO - [ABLATION] 4_full                              | features=249 | Val AUC=0.8490 AP=0.5049 F1=0.5031 | Test AUC=0.8529 AP=0.4973 F1=0.5123
+[2026-06-01T22:00:14.212+0000] {ml_pipeline.py:1328} INFO - [ABLATION] Summary table:
+[2026-06-01T22:00:14.213+0000] {logging_mixin.py:188} WARNING - --- Logging error ---
+[2026-06-01T22:00:14.213+0000] {logging_mixin.py:188} WARNING - Traceback (most recent call last):
+[2026-06-01T22:00:14.214+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 1110, in emit
+    msg = self.format(record)
+          ^^^^^^^^^^^^^^^^^^^
+[2026-06-01T22:00:14.215+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 953, in format
+    return fmt.format(record)
+           ^^^^^^^^^^^^^^^^^^
+[2026-06-01T22:00:14.215+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 687, in format
+    record.message = record.getMessage()
+                     ^^^^^^^^^^^^^^^^^^^
+[2026-06-01T22:00:14.216+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 377, in getMessage
+    msg = msg % self.args
+          ~~~~^~~~~~~~~~~
+[2026-06-01T22:00:14.216+0000] {logging_mixin.py:188} WARNING - TypeError: not all arguments converted during string formatting
+[2026-06-01T22:00:14.217+0000] {logging_mixin.py:188} WARNING - Call stack:
+[2026-06-01T22:00:14.233+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/bin/***", line 8, in <module>
+    sys.exit(main())
+[2026-06-01T22:00:14.234+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/__main__.py", line 57, in main
+    args.func(args)
+[2026-06-01T22:00:14.234+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/cli_config.py", line 49, in command
+    return func(*args, **kwargs)
+[2026-06-01T22:00:14.235+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/utils/cli.py", line 114, in wrapper
+    return f(*args, **kwargs)
+[2026-06-01T22:00:14.235+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/utils/providers_configuration_loader.py", line 55, in wrapped_function
+    return func(*args, **kwargs)
+[2026-06-01T22:00:14.236+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/scheduler_command.py", line 67, in scheduler
+    run_command_with_daemon_option(
+[2026-06-01T22:00:14.237+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/daemon_utils.py", line 86, in run_command_with_daemon_option
+    callback()
+[2026-06-01T22:00:14.237+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/scheduler_command.py", line 70, in <lambda>
+    callback=lambda: _run_scheduler_job(args),
+[2026-06-01T22:00:14.238+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/scheduler_command.py", line 52, in _run_scheduler_job
+    run_job(job=job_runner.job, execute_callable=job_runner._execute)
+[2026-06-01T22:00:14.238+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/utils/session.py", line 79, in wrapper
+    return func(*args, session=session, **kwargs)
+[2026-06-01T22:00:14.239+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/jobs/job.py", line 393, in run_job
+    return execute_job(job, execute_callable=execute_callable)
+[2026-06-01T22:00:14.240+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/jobs/job.py", line 422, in execute_job
+    ret = execute_callable()
+[2026-06-01T22:00:14.240+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/jobs/scheduler_job_runner.py", line 846, in _execute
+    self.job.executor.start()
+[2026-06-01T22:00:14.241+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/executors/local_executor.py", line 372, in start
+    self.impl.start()
+[2026-06-01T22:00:14.241+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/executors/local_executor.py", line 311, in start
+    worker.start()
+[2026-06-01T22:00:14.241+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/multiprocessing/process.py", line 121, in start
+    self._popen = self._Popen(self)
+[2026-06-01T22:00:14.242+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/multiprocessing/context.py", line 224, in _Popen
+    return _default_context.get_context().Process._Popen(process_obj)
+[2026-06-01T22:00:14.242+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/multiprocessing/context.py", line 281, in _Popen
+    return Popen(process_obj)
+[2026-06-01T22:00:14.243+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/multiprocessing/popen_fork.py", line 19, in __init__
+    self._launch(process_obj)
+[2026-06-01T22:00:14.243+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/multiprocessing/popen_fork.py", line 71, in _launch
+    code = process_obj._bootstrap(parent_sentinel=child_r)
+[2026-06-01T22:00:14.243+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+[2026-06-01T22:00:14.243+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/executors/local_executor.py", line 77, in run
+    return super().run()
+[2026-06-01T22:00:14.244+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+[2026-06-01T22:00:14.244+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/executors/local_executor.py", line 201, in do_work
+    self.execute_work(key=key, command=command)
+[2026-06-01T22:00:14.245+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/executors/local_executor.py", line 94, in execute_work
+    state = self._execute_work_in_fork(command)
+[2026-06-01T22:00:14.245+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/executors/local_executor.py", line 134, in _execute_work_in_fork
+    args.func(args)
+[2026-06-01T22:00:14.245+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/cli_config.py", line 49, in command
+    return func(*args, **kwargs)
+[2026-06-01T22:00:14.246+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/utils/cli.py", line 114, in wrapper
+    return f(*args, **kwargs)
+[2026-06-01T22:00:14.246+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/task_command.py", line 438, in task_run
+    task_return_code = _run_task_by_selected_method(args, _dag, ti)
+[2026-06-01T22:00:14.247+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/task_command.py", line 216, in _run_task_by_selected_method
+    return _run_task_by_local_task_job(args, ti)
+[2026-06-01T22:00:14.247+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/task_command.py", line 278, in _run_task_by_local_task_job
+    ret = run_job(job=job_runner.job, execute_callable=job_runner._execute)
+[2026-06-01T22:00:14.248+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/utils/session.py", line 79, in wrapper
+    return func(*args, session=session, **kwargs)
+[2026-06-01T22:00:14.248+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/jobs/job.py", line 393, in run_job
+    return execute_job(job, execute_callable=execute_callable)
+[2026-06-01T22:00:14.249+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/jobs/job.py", line 422, in execute_job
+    ret = execute_callable()
+[2026-06-01T22:00:14.249+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/jobs/local_task_job_runner.py", line 165, in _execute
+    self.task_runner.start()
+[2026-06-01T22:00:14.249+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/task/task_runner/standard_task_runner.py", line 48, in start
+    self.process = self._start_by_fork()
+[2026-06-01T22:00:14.250+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/task/task_runner/standard_task_runner.py", line 100, in _start_by_fork
+    ret = args.func(args, dag=self.dag)
+[2026-06-01T22:00:14.250+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/cli_config.py", line 49, in command
+    return func(*args, **kwargs)
+[2026-06-01T22:00:14.251+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/utils/cli.py", line 114, in wrapper
+    return f(*args, **kwargs)
+[2026-06-01T22:00:14.251+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/task_command.py", line 438, in task_run
+    task_return_code = _run_task_by_selected_method(args, _dag, ti)
+[2026-06-01T22:00:14.252+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/task_command.py", line 218, in _run_task_by_selected_method
+    return _run_raw_task(args, ti)
+[2026-06-01T22:00:14.252+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/cli/commands/task_command.py", line 297, in _run_raw_task
+    return ti._run_raw_task(
+[2026-06-01T22:00:14.252+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/utils/session.py", line 79, in wrapper
+    return func(*args, session=session, **kwargs)
+[2026-06-01T22:00:14.253+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/models/taskinstance.py", line 2334, in _run_raw_task
+    self._execute_task_with_callbacks(context, test_mode, session=session)
+[2026-06-01T22:00:14.253+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/models/taskinstance.py", line 2499, in _execute_task_with_callbacks
+    result = self._execute_task(context, task_orig)
+[2026-06-01T22:00:14.254+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/models/taskinstance.py", line 2516, in _execute_task
+    return _execute_task(self, context, task_orig)
+[2026-06-01T22:00:14.254+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+[2026-06-01T22:00:14.255+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+[2026-06-01T22:00:14.255+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+[2026-06-01T22:00:14.256+0000] {logging_mixin.py:188} WARNING -   File "/opt/***/dags/dag_crime_pipeline.py", line 298, in _run_ml_pipeline
+    result = train_and_predict(
+[2026-06-01T22:00:14.256+0000] {logging_mixin.py:188} WARNING -   File "/opt/***/scripts/ml/ml_pipeline.py", line 1825, in train_and_predict
+    _run_ablation_study(
+[2026-06-01T22:00:14.258+0000] {logging_mixin.py:188} WARNING -   File "/opt/***/scripts/ml/ml_pipeline.py", line 1329, in _run_ablation_study
+    log.info("[ABLATION] %-35s | %s | %s | %s | %s | %s | %s",
+[2026-06-01T22:00:14.258+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 1489, in info
+    self._log(INFO, msg, args, **kwargs)
+[2026-06-01T22:00:14.258+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 1634, in _log
+    self.handle(record)
+[2026-06-01T22:00:14.259+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 1644, in handle
+    self.callHandlers(record)
+[2026-06-01T22:00:14.259+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 1706, in callHandlers
+    hdlr.handle(record)
+[2026-06-01T22:00:14.259+0000] {logging_mixin.py:188} WARNING -   File "/usr/local/lib/python3.11/logging/__init__.py", line 978, in handle
+    self.emit(record)
+[2026-06-01T22:00:14.260+0000] {logging_mixin.py:188} WARNING -   File "/home/***/.local/lib/python3.11/site-packages/***/utils/log/file_task_handler.py", line 247, in emit
+    self.handler.emit(record)
+[2026-06-01T22:00:14.260+0000] {logging_mixin.py:188} WARNING - Message: '[ABLATION] %-35s | %s | %s | %s | %s | %s | %s'
+Arguments: ('Scenario', 'Feats', 'Val_AUC', 'Val_AP', 'Val_F1', 'Tst_AUC', 'Tst_AP', 'Tst_F1')
+[2026-06-01T22:00:14.261+0000] {ml_pipeline.py:1333} INFO - [ABLATION] ----------------------------------------------------------------------------------------------------
+[2026-06-01T22:00:14.261+0000] {ml_pipeline.py:1335} INFO - [ABLATION] 1_temporal_only                     |   141 | 0.8489  | 0.5035 | 0.5228 | 0.8516  | 0.4956 | 0.5076
+[2026-06-01T22:00:14.262+0000] {ml_pipeline.py:1335} INFO - [ABLATION] 2_temporal_spatial                  |   167 | 0.8482  | 0.5027 | 0.5161 | 0.8523  | 0.4986 | 0.5144
+[2026-06-01T22:00:14.262+0000] {ml_pipeline.py:1335} INFO - [ABLATION] 3_temporal_spatial_context          |   209 | 0.8489  | 0.5049 | 0.5136 | 0.8530  | 0.4995 | 0.5138
+[2026-06-01T22:00:14.263+0000] {ml_pipeline.py:1335} INFO - [ABLATION] 4_full                              |   249 | 0.8490  | 0.5049 | 0.5031 | 0.8529  | 0.4973 | 0.5123
+[2026-06-01T22:00:14.264+0000] {ml_pipeline.py:1342} INFO - ========================================================================
+[2026-06-01T22:00:14.290+0000] {ml_pipeline.py:1856} INFO - [ML] Model artifact saved → /tmp/crime_model_v13.pkl
+[2026-06-01T22:00:14.291+0000] {ml_pipeline.py:1859} INFO - ========================================================================
+[2026-06-01T22:00:14.291+0000] {ml_pipeline.py:1860} INFO -   SUMMARY v13 dynamic-spatial
+[2026-06-01T22:00:14.292+0000] {ml_pipeline.py:1861} INFO -   VAL  AUC=0.8489  F1=0.5103  AP=0.5049
+[2026-06-01T22:00:14.292+0000] {ml_pipeline.py:1862} INFO -   TEST AUC=0.8527  F1=0.4989  AP=0.4984
+[2026-06-01T22:00:14.292+0000] {ml_pipeline.py:1863} INFO -   Threshold (F1-calib)=0.64  |  Predictions=875
+[2026-06-01T22:00:14.293+0000] {ml_pipeline.py:1864} INFO - ========================================================================
+[2026-06-01T22:00:14.415+0000] {dag_crime_pipeline.py:312} WARNING - [ML] ⚠️ Model chưa đạt ngưỡng: val_auc=0.8489 val_f1=0.5103
+[2026-06-01T22:00:14.419+0000] {python.py:201} INFO - Done. Returned value was: {'val_auc': 0.8489044795166852, 'val_f1': 0.5103034844511053, 'test_auc': 0.8527119911578673, 'test_f1': 0.49885757806549885, 'threshold': 0.6400000000000001, 'n_predictions': 875, 'model_version': '2026-06-01.crime_prob_v13_dynamic_spatial'}
+[2026-06-01T22:00:14.449+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260601T144005, start_date=20260601T215705, end_date=20260601T220014
+[2026-06-01T22:00:14.811+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-06-01T22:00:14.841+0000] {taskinstance.py:3280} INFO - 2 downstream tasks scheduled from follow-on schedule check
