@@ -1,23 +1,27 @@
 """
-ml_pipeline.py  –  Crime Hotspot Forecasting v13 dynamic-spatial
-=================================================
-Airflow PythonOperator callable.
-Đọc enriched_crime_data từ BigQuery → Feature Engineering v13 →
-Train XGBoost → Ghi prediction_results về BigQuery.
+ml_pipeline.py – Crime Hotspot Forecasting v20 target-safe ranker
+=================================================================
+Airflow PythonOperator callable for BigData production.
 
-Cải tiến v11 (so với v1):
-  [4G] H3 Spatial Spillover          – Routine Activity Theory
-  [4I] Near-Repeat Victimization     – Near-Repeat Theory
-  [4J] Cross-Crime Lead-Lag          – Escalation Theory
-  [4K] Arrest Deterrence             – Deterrence Theory
-  [4L] Density-Normalized Crime      – Density Bias Correction
-  [4M] Holiday / Seasonal Events     – Routine Activity Theory
-  [4N] Momentum + Trend Direction    – Temporal Momentum
-  [4O] Hardship Interaction          – Social Disorganization Theory
+Pipeline:
+  BigQuery enriched_crime_data → daily H3 grid → v20 feature engineering
+  → XGBoost binary HOTSPOT ranker → top-k dashboard risk levels
+  → prediction_results BigQuery.
 
-Output schema (prediction_results):
-  prediction_date | h3_index | crime_probability | risk_level |
-  model_version   | created_at
+Target:
+  next_hotspot = 1 if next_total >= 2, else 0.
+
+Dashboard risk policy:
+  CRITICAL = top 5% H3 cells by hotspot_score
+  HIGH     = next 10% cells, cumulative top 15%
+  MEDIUM   = next 15% cells, cumulative top 30%
+  LOW      = remaining 70%
+
+This avoids the old failure mode where a fixed probability threshold could mark
+an excessive share of the city as HIGH/CRITICAL.
+
+Output schema keeps backward-compatible crime_probability and adds hotspot_score,
+TopK metrics, feature diagnostics and selected context fields.
 """
 
 from __future__ import annotations
@@ -33,13 +37,13 @@ import pandas as pd
 from google.cloud import bigquery
 
 warnings.filterwarnings("ignore")
-log = logging.getLogger("ML_Pipeline_v11")
+log = logging.getLogger("ML_Pipeline_v20_target_safe")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 0.  CONSTANTS & CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-MODEL_VERSION_PREFIX = "crime_prob_v13_dynamic_spatial"
+MODEL_VERSION_PREFIX = "hotspot_v20_target_safe_ranker"
 
 # Rolling split windows (ngày)
 TRAIN_DAYS       = 220
@@ -50,18 +54,18 @@ MIN_HISTORY_DAYS = 60
 
 RANDOM_STATE = 42
 
-# XGBoost hyperparameters (đã tune cho bài toán binary hotspot)
+# XGBoost hyperparameters from Kaggle v20-target-safe.
 XGB_PARAMS = dict(
-    n_estimators          = 2500,
-    learning_rate         = 0.020,
+    n_estimators          = 1800,
+    learning_rate         = 0.025,
     max_depth             = 4,
-    min_child_weight      = 20,
-    subsample             = 0.85,
-    colsample_bytree      = 0.65,
-    colsample_bylevel     = 0.75,
-    colsample_bynode      = 0.85,
-    reg_alpha             = 0.60,
-    reg_lambda            = 8.0,
+    min_child_weight      = 8,
+    subsample             = 0.90,
+    colsample_bytree      = 0.75,
+    colsample_bylevel     = 0.85,
+    colsample_bynode      = 0.90,
+    reg_alpha             = 0.30,
+    reg_lambda            = 4.0,
     objective             = "binary:logistic",
     eval_metric           = "aucpr",
     tree_method           = "hist",
@@ -72,14 +76,35 @@ XGB_PARAMS = dict(
 
 THRESHOLD_GRID = np.arange(0.05, 0.65, 0.01).tolist()
 
-# v13 experiment controls
+# v20 experiment controls
 RECENT_DAYS_TO_KEEP = 320
 FLOAT_POLICY = "float32"
-POS_WEIGHT_POWER = 0.75
+
+# Binary target: HOTSPOT means tomorrow count >= 2.
+TARGET_COL = "next_hotspot"
+CLASS_WEIGHT_POWER = 0.70
+CLASS_WEIGHT_CAP = 12.0
+CLASS_WEIGHT_EXTRA_BOOST = {1: 1.25}
+EMERGING_POSITIVE_WEIGHT_BOOST = 1.25
+LOW_MID_PRIOR_POSITIVE_WEIGHT_BOOST = 1.35
+NEIGHBOR_SPIKE_POSITIVE_WEIGHT_BOOST = 1.15
+MAX_SAMPLE_WEIGHT_MULTIPLIER = 1.75
+
+# Threshold is diagnostic only. Dashboard risk uses top-k ranking.
 USE_PRED_RATE_GUARD = True
-MAX_PRED_RATE_MULTIPLIER = 2.00
+MAX_PRED_RATE_MULTIPLIER = 2.20
+
 DROP_REDUNDANT_PRIOR_FEATURES = True
 DROP_STRONG_RAW_PRIORS = True
+DROP_REDUNDANT_LONG_MEMORY_SUMS = True
+DROP_DIRECT_STATIC_CONTEXT_FEATURES = True
+DROP_AUDIT_ONLY_PRIOR_BAND_FEATURES = True
+AUDIT_ONLY_PRIOR_BAND_FEATURES = {"prior_band_numeric", "is_low_mid_prior", "is_high_prior"}
+
+DASHBOARD_TOP_CRITICAL = 0.05
+DASHBOARD_TOP_HIGH = 0.15
+DASHBOARD_TOP_MEDIUM = 0.30
+DASHBOARD_EVAL_KS = [0.05, 0.10, 0.15, 0.25, 0.30]
 
 # Ngày lễ Chicago ảnh hưởng đến tội phạm (Routine Activity Theory)
 _HOLIDAYS_RAW = [
@@ -109,31 +134,49 @@ PROPERTY_TYPES = {
 BQ_PREDICTION_SCHEMA = [
     bigquery.SchemaField("prediction_date",   "DATE"),
     bigquery.SchemaField("h3_index",          "STRING"),
-    bigquery.SchemaField("crime_probability", "FLOAT"),
+    bigquery.SchemaField("crime_probability", "FLOAT"),  # backward-compatible alias of hotspot_score
+    bigquery.SchemaField("hotspot_score",     "FLOAT"),
     bigquery.SchemaField("risk_level",        "STRING"),
     bigquery.SchemaField("model_version",     "STRING"),
     bigquery.SchemaField("created_at",        "TIMESTAMP"),
-    # Extended debug / context columns
-    bigquery.SchemaField("pred_has_crime",    "INTEGER"),
+    bigquery.SchemaField("pred_hotspot",      "INTEGER"),
     bigquery.SchemaField("risk_rank",         "INTEGER"),
+    bigquery.SchemaField("risk_rank_pct",     "FLOAT"),
     bigquery.SchemaField("val_auc",           "FLOAT"),
+    bigquery.SchemaField("val_ap",            "FLOAT"),
     bigquery.SchemaField("val_f1",            "FLOAT"),
     bigquery.SchemaField("test_auc",          "FLOAT"),
+    bigquery.SchemaField("test_ap",           "FLOAT"),
     bigquery.SchemaField("test_f1",           "FLOAT"),
+    bigquery.SchemaField("val_top05_recall",  "FLOAT"),
+    bigquery.SchemaField("val_top05_lift",    "FLOAT"),
+    bigquery.SchemaField("val_top15_recall",  "FLOAT"),
+    bigquery.SchemaField("val_top15_lift",    "FLOAT"),
+    bigquery.SchemaField("val_top30_recall",  "FLOAT"),
+    bigquery.SchemaField("val_top30_lift",    "FLOAT"),
+    bigquery.SchemaField("test_top05_recall", "FLOAT"),
+    bigquery.SchemaField("test_top05_lift",   "FLOAT"),
+    bigquery.SchemaField("test_top15_recall", "FLOAT"),
+    bigquery.SchemaField("test_top15_lift",   "FLOAT"),
+    bigquery.SchemaField("test_top30_recall", "FLOAT"),
+    bigquery.SchemaField("test_top30_lift",   "FLOAT"),
+    # selected context / debug columns
     bigquery.SchemaField("community_area",    "FLOAT"),
     bigquery.SchemaField("hardship_index",    "FLOAT"),
     bigquery.SchemaField("unemployment_rate", "FLOAT"),
     bigquery.SchemaField("population_density","FLOAT"),
+    bigquery.SchemaField("h3_train_percentile", "FLOAT"),
+    bigquery.SchemaField("h3_train_active_rate", "FLOAT"),
     bigquery.SchemaField("roll_mean_7",       "FLOAT"),
     bigquery.SchemaField("roll_mean_30",      "FLOAT"),
     bigquery.SchemaField("zero_streak",       "FLOAT"),
     bigquery.SchemaField("nbr_r1_mean",       "FLOAT"),
     bigquery.SchemaField("nbr_r1_active_rate", "FLOAT"),
+    bigquery.SchemaField("nbr_r1_active_count", "FLOAT"),
     bigquery.SchemaField("near_repeat_3d",    "FLOAT"),
     bigquery.SchemaField("arrest_rate_7",     "FLOAT"),
     bigquery.SchemaField("is_holiday",        "FLOAT"),
 ]
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  UTILITY FUNCTIONS
@@ -232,6 +275,7 @@ def find_best_threshold(
 
 
 def risk_level_from_prob(prob: pd.Series) -> pd.Series:
+    """Backward-compatible fixed-bin helper; not used for v20 dashboard output."""
     return pd.cut(
         prob,
         bins=[0.0, 0.30, 0.60, 0.80, 1.01],
@@ -239,6 +283,85 @@ def risk_level_from_prob(prob: pd.Series) -> pd.Series:
         right=False,
         include_lowest=True,
     ).astype(str)
+
+
+def assign_dashboard_risk_levels_by_rank(score: pd.Series) -> pd.Series:
+    """Assign exactly bounded dashboard groups on one prediction day.
+
+    CRITICAL: top 5%; HIGH: next 10%; MEDIUM: next 15%; LOW: rest.
+    This is the production guard against marking too much of the city as hot.
+    """
+    n = len(score)
+    if n == 0:
+        return pd.Series([], dtype="object")
+    rank_pct = score.rank(method="first", ascending=False) / float(n)
+    risk = pd.Series("LOW", index=score.index, dtype="object")
+    risk.loc[rank_pct <= DASHBOARD_TOP_MEDIUM] = "MEDIUM"
+    risk.loc[rank_pct <= DASHBOARD_TOP_HIGH] = "HIGH"
+    risk.loc[rank_pct <= DASHBOARD_TOP_CRITICAL] = "CRITICAL"
+    return risk
+
+
+def precision_recall_lift_at_daily_k(
+    eval_df: pd.DataFrame,
+    score_col: str = "hotspot_score",
+    actual_col: str = "actual_hotspot",
+    k_frac: float = 0.05,
+) -> dict:
+    """Daily TopK precision/recall/lift for rare hotspot ranking."""
+    rows = []
+    for d, part in eval_df.groupby("date"):
+        part = part.sort_values(score_col, ascending=False)
+        n = len(part)
+        if n == 0:
+            continue
+        k = max(1, int(np.ceil(k_frac * n)))
+        top = part.head(k)
+        total_pos = float(part[actual_col].sum())
+        base_rate = total_pos / max(n, 1)
+        hit = float(top[actual_col].sum())
+        precision = hit / max(k, 1)
+        recall = hit / max(total_pos, 1.0)
+        lift = precision / max(base_rate, 1e-12)
+        rows.append({"date": d, "precision": precision, "recall": recall, "lift": lift, "k": k, "base_rate": base_rate})
+    if not rows:
+        return {"precision_at_k": 0.0, "recall_at_k": 0.0, "lift_at_k": 0.0}
+    m = pd.DataFrame(rows)
+    return {
+        "precision_at_k": float(m["precision"].mean()),
+        "recall_at_k": float(m["recall"].mean()),
+        "lift_at_k": float(m["lift"].mean()),
+    }
+
+
+def evaluate_ranker(
+    df_part: pd.DataFrame,
+    y_true: np.ndarray,
+    score: np.ndarray,
+    threshold: float,
+) -> dict:
+    """Combined threshold diagnostics + daily ranking metrics."""
+    from sklearn.metrics import roc_auc_score, average_precision_score, precision_score, recall_score, f1_score
+    pred = (score >= threshold).astype(int)
+    out = {
+        "precision": float(precision_score(y_true, pred, zero_division=0)),
+        "recall": float(recall_score(y_true, pred, zero_division=0)),
+        "f1": float(f1_score(y_true, pred, zero_division=0)),
+        "auc": float(roc_auc_score(y_true, score)) if len(np.unique(y_true)) > 1 else 0.5,
+        "ap": float(average_precision_score(y_true, score)) if len(np.unique(y_true)) > 1 else float(np.mean(y_true)),
+        "pred_rate": float(np.mean(pred)),
+        "base_rate": float(np.mean(y_true)),
+    }
+    e = df_part[["date", "h3_index"]].copy()
+    e["actual_hotspot"] = y_true.astype(int)
+    e["hotspot_score"] = score.astype(float)
+    for k in DASHBOARD_EVAL_KS:
+        r = precision_recall_lift_at_daily_k(e, k_frac=k)
+        tag = f"top{int(k*100):02d}"
+        out[f"{tag}_precision"] = r["precision_at_k"]
+        out[f"{tag}_recall"] = r["recall_at_k"]
+        out[f"{tag}_lift"] = r["lift_at_k"]
+    return out
 
 
 def model_version_str() -> str:
@@ -317,6 +440,10 @@ def load_enriched_data(
     log.info("[ML] Loading enriched_crime_data from BigQuery (last %d days)...", lookback_days)
 
     query = f"""
+        WITH max_src_date AS (
+            SELECT MAX(DATE(date)) AS max_date
+            FROM `{project_id}.{dataset}.{enriched_table}`
+        )
         SELECT
             h3_index,
             DATE(date)                          AS date,
@@ -367,14 +494,24 @@ def load_enriched_data(
             CASE WHEN hour_of_day IN (0,1,2,3,4,5,22,23)
                  THEN 1 ELSE 0 END              AS is_night,
             CASE WHEN hour_of_day BETWEEN 18 AND 21
-                 THEN 1 ELSE 0 END              AS is_evening
-        FROM `{project_id}.{dataset}.{enriched_table}`
-        WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL {lookback_days} DAY)
+                 THEN 1 ELSE 0 END              AS is_evening,
+            CASE WHEN hour_of_day BETWEEN 6 AND 11
+                 THEN 1 ELSE 0 END              AS is_morning,
+            CASE WHEN hour_of_day BETWEEN 12 AND 17
+                 THEN 1 ELSE 0 END              AS is_afternoon
+        FROM `{project_id}.{dataset}.{enriched_table}` AS src
+        CROSS JOIN max_src_date
+        WHERE DATE(src.date) >= DATE_SUB(max_src_date.max_date, INTERVAL {lookback_days} DAY)
           AND h3_index IS NOT NULL
           AND latitude  IS NOT NULL
           AND longitude IS NOT NULL
     """
     df = client.query(query).to_dataframe()
+    if df.empty:
+        raise ValueError(
+            "No enriched crime rows were loaded from BigQuery. "
+            "Check table name, date column, and lookback_days."
+        )
     df["date"] = pd.to_datetime(df["date"]).dt.floor("D")
     log.info("[ML] Loaded %d rows, date range: %s → %s",
              len(df), df["date"].min().date(), df["date"].max().date())
@@ -415,6 +552,10 @@ def aggregate_daily(df_raw: pd.DataFrame) -> pd.DataFrame:
     if "case_number" not in raw.columns:
         raw["case_number"] = np.arange(len(raw)).astype(str)
 
+    # Preserve both type counts and time-of-day ratios.
+    for c in ["is_morning", "is_afternoon"]:
+        if c not in raw.columns:
+            raw[c] = 0
     agg_spec: dict = {
         "case_number":  "count",
         "is_violent":   "sum",
@@ -425,6 +566,8 @@ def aggregate_daily(df_raw: pd.DataFrame) -> pd.DataFrame:
         "arrest_num":   "sum",
         "is_night":     "mean",
         "is_evening":   "mean",
+        "is_morning":   "mean",
+        "is_afternoon": "mean",
     }
     for c in mean_cols:
         agg_spec[c] = "mean"
@@ -507,7 +650,7 @@ def build_features(
     train_dates: list,
 ) -> pd.DataFrame:
     """
-    Feature engineering v13 – RAM-optimised rewrite.
+    Feature engineering v20 – RAM-optimised rewrite.
 
     Thay đổi so với bản gốc:
       - float32 thay float64 cho mọi cột số mới tạo ra (giảm ~50% RAM)
@@ -588,6 +731,29 @@ def build_features(
     df["crime_z_90"]  = safe_ratio(
         df["total_crimes"] - df["roll_mean_90"].fillna(0),
         df["roll_std_90"].fillna(0), default=0, clip=10,
+    ).astype("float32")
+
+    # v20: short-term shock / emerging activation features.
+    df["shock_lag1_vs_roll7"]  = safe_ratio(df["lag_1"], df["roll_mean_7"] + 1e-3, default=0, clip=20).astype("float32")
+    df["shock_lag1_vs_roll30"] = safe_ratio(df["lag_1"], df["roll_mean_30"] + 1e-3, default=0, clip=20).astype("float32")
+    df["shock_3_14"]           = safe_ratio(df["roll_mean_3"], df["roll_mean_14"] + 1e-3, default=0, clip=10).astype("float32")
+    df["shock_3_60"]           = safe_ratio(df["roll_mean_3"], df["roll_mean_60"] + 1e-3, default=0, clip=10).astype("float32")
+    df["roll3_minus_roll30"]   = (df["roll_mean_3"].fillna(0) - df["roll_mean_30"].fillna(0)).astype("float32")
+    df["roll7_minus_roll60"]   = (df["roll_mean_7"].fillna(0) - df["roll_mean_60"].fillna(0)).astype("float32")
+    df["local_spike_z_30"]     = safe_ratio(
+        df["lag_1"].fillna(0) - df["roll_mean_30"].fillna(0),
+        df["roll_std_30"].fillna(0) + 1e-3, default=0, clip=10,
+    ).astype("float32")
+    df["local_sudden_activation_3d"] = (
+        (df["lag_1"].fillna(0) > 0) & (df["lag_2"].fillna(0) <= 0) & (df["lag_3"].fillna(0) <= 0)
+    ).astype("int8")
+    df["local_recent_decay"] = (
+        0.55 * df["lag_1"].fillna(0).astype("float32") +
+        0.30 * df["lag_2"].fillna(0).astype("float32") +
+        0.15 * df["lag_3"].fillna(0).astype("float32")
+    ).astype("float32")
+    df["active_recent_vs_long"] = safe_ratio(
+        df["active_rate_7"], df["active_rate_60"] + 1e-3, default=0, clip=10
     ).astype("float32")
 
     # ── 4C  Crime-type rolling composition ───────────────────────────────
@@ -706,7 +872,7 @@ def build_features(
     gc.collect()
 
     # ── 4G  Spatial Spillover (H3 neighbors) ─────────────────────────────
-    log.info("[ML]   [4G] H3 spatial spillover v13 dynamic-spatial")
+    log.info("[ML]   [4G] H3 spatial spillover v20 target-safe")
     if has_h3:
         dates_order = pd.Index(sorted(daily["date"].unique()))
         cells_order = pd.Index(sorted(daily["h3_index"].unique()))
@@ -834,6 +1000,26 @@ def build_features(
         df["local_nbr_double_burst"] = (
             df["burst_3_30"].fillna(0).clip(0, 10).astype("float32") *
             df["nbr_r1_burst_1_7"].fillna(0).clip(0, 10).astype("float32")
+        ).astype("float32")
+
+        df["nbr_r1_spike_vs_roll7"] = safe_ratio(
+            df["nbr_r1_mean"].fillna(0) - df["nbr_r1_roll7"].fillna(0),
+            df["nbr_r1_std"].fillna(0) + 1e-3, default=0, clip=10,
+        ).astype("float32")
+        df["nbr_r1_active_accel"] = (
+            df["nbr_r1_active_rate"].fillna(0).astype("float32") -
+            sg["nbr_r1_active_rate"].shift(1).fillna(0).astype("float32")
+        ).astype("float32")
+        df["nbr_any_active_x_local_cold"] = (
+            df["nbr_r1_any_active"].fillna(0).astype("float32") *
+            (df["lag_1"].fillna(0) <= 0).astype("float32")
+        ).astype("float32")
+        df["nbr_spike_x_local_sudden"] = (
+            (df["nbr_r1_spike_vs_roll7"].fillna(0) > 1.0).astype("float32") *
+            df.get("local_sudden_activation_3d", 0)
+        ).astype("float32")
+        df["nbr_hot_count_per_neighbor"] = safe_ratio(
+            df["nbr_r1_active_count"], df["nbr_r1_active_rate"] * 0 + 6.0, default=0, clip=1
         ).astype("float32")
 
         del nbr_long, crime_arr, active_arr, r1_idx, r2_idx
@@ -1056,19 +1242,18 @@ def train_model(
     test_dates:  list,
 ) -> tuple:
     """
-    Train XGBoost v13, calibrate threshold with predicted-rate guard, evaluate.
+    Train XGBoost v20 target-safe HOTSPOT ranker.
+
+    Main target: next_hotspot = (next_total >= 2).
+    Threshold metrics are diagnostic; production dashboard uses rank-bounded top-k groups.
     Returns: (model, feature_cols, train_medians, best_threshold, val_res, test_res, scale_pos_weight)
     """
     import xgboost as xgb
-    from sklearn.metrics import (
-        roc_auc_score, average_precision_score,
-        precision_score, recall_score, f1_score,
-    )
 
-    log.info("[ML] Preparing train/calib/val/test splits...")
+    log.info("[ML] Preparing train/calib/val/test splits for v20 HOTSPOT ranker...")
 
     ID_COLS = {"h3_index", "date"}
-    TARGET_COLS = {"next_total", "next_has_crime"}
+    TARGET_COLS = {"next_total", "next_has_crime", "next_hotspot", "next_topk_group", "next_rank_pct"}
     exclude = ID_COLS | TARGET_COLS
 
     feature_cols = [
@@ -1084,24 +1269,30 @@ def train_model(
     val_mask   = df["date"].isin(val_dates)   & supervised
     test_mask  = df["date"].isin(test_dates)  & supervised
 
-    # v13: remove redundant/raw priors that dominated v11/v12 and caused hotspot memorization.
-    redundant_priors = {
-        "h3_train_sum", "h3_train_max", "h3_train_pct",
-        "comm_train_sum", "comm_train_max",
-    }
+    # v20: prior damping and audit-only guard to reduce hotspot memorization.
+    redundant_priors = {"h3_train_sum", "h3_train_max", "h3_train_pct", "comm_train_sum", "comm_train_max"}
     strong_raw_priors = {"h3_train_mean", "h3_train_std", "comm_train_mean", "comm_train_std"}
+    long_memory_sums = {"roll_sum_60", "roll_sum_90"}
+    direct_static = {
+        "community_area", "latitude", "longitude", "day_of_week", "month",
+        "median_income", "per_capita_income",
+    }
     removed = set()
     if DROP_REDUNDANT_PRIOR_FEATURES:
         removed |= redundant_priors
     if DROP_STRONG_RAW_PRIORS:
         removed |= strong_raw_priors
+    if DROP_REDUNDANT_LONG_MEMORY_SUMS:
+        removed |= long_memory_sums
+    if DROP_DIRECT_STATIC_CONTEXT_FEATURES:
+        removed |= direct_static
+    if DROP_AUDIT_ONLY_PRIOR_BAND_FEATURES:
+        removed |= AUDIT_ONLY_PRIOR_BAND_FEATURES
     feature_cols = [c for c in feature_cols if c not in removed]
-    if removed:
-        log.info("[ML] Prior de-dup/damping: removed %d prior feature(s)", len(removed))
+    log.info("[ML] Removed guarded/redundant features: %d", len(removed))
 
     # Drop constant / all-null features based on train only.
-    keep = []
-    dropped = []
+    keep, dropped = [], []
     for c in feature_cols:
         s = pd.to_numeric(df.loc[train_mask, c], errors="coerce")
         if s.notna().sum() > 0 and s.nunique(dropna=True) > 1:
@@ -1115,35 +1306,41 @@ def train_model(
     X_val,   _             = sanitize_numeric(df.loc[val_mask],   feature_cols, train_medians)
     X_test,  _             = sanitize_numeric(df.loc[test_mask],  feature_cols, train_medians)
 
-    y_train = df.loc[train_mask, "next_has_crime"].astype(int)
-    y_calib = df.loc[calib_mask, "next_has_crime"].astype(int)
-    y_val   = df.loc[val_mask,   "next_has_crime"].astype(int)
-    y_test  = df.loc[test_mask,  "next_has_crime"].astype(int)
+    y_train = df.loc[train_mask, TARGET_COL].astype(int)
+    y_calib = df.loc[calib_mask, TARGET_COL].astype(int)
+    y_val   = df.loc[val_mask,   TARGET_COL].astype(int)
+    y_test  = df.loc[test_mask,  TARGET_COL].astype(int)
 
     neg = int((y_train == 0).sum())
     pos = int((y_train == 1).sum())
     raw_scale_pos_weight = neg / max(pos, 1)
-    scale_pos_weight = raw_scale_pos_weight ** POS_WEIGHT_POWER
+    scale_pos_weight = min(CLASS_WEIGHT_CAP, raw_scale_pos_weight ** CLASS_WEIGHT_POWER)
+    scale_pos_weight *= CLASS_WEIGHT_EXTRA_BOOST.get(1, 1.0)
 
-    near_repeat = (
-        df.loc[train_mask, "near_repeat_3d"].fillna(0).values
-        if "near_repeat_3d" in df.columns else 0
-    )
-    next_total_train = df.loc[train_mask, "next_total"].astype(float).clip(0, 5).values
-    sample_weight = np.where(
-        y_train == 1,
-        1.0 + 0.3 * next_total_train + 0.2 * near_repeat,
-        1.0,
-    ).astype(np.float32)
+    # Sample weights: boost positives that are emerging / low-mid prior / neighbor-spike,
+    # using only train-only priors and past/current features.
+    sample_weight = np.ones(len(y_train), dtype=np.float32)
+    train_part = df.loc[train_mask]
+    pos_mask = y_train.values == 1
+    if "local_sudden_activation_3d" in train_part.columns:
+        sample_weight[pos_mask & (train_part["local_sudden_activation_3d"].fillna(0).values > 0)] *= EMERGING_POSITIVE_WEIGHT_BOOST
+    if "h3_train_percentile" in train_part.columns:
+        low_mid = train_part["h3_train_percentile"].fillna(0).values < 0.75
+        sample_weight[pos_mask & low_mid] *= LOW_MID_PRIOR_POSITIVE_WEIGHT_BOOST
+    if "nbr_r1_spike_vs_roll7" in train_part.columns:
+        nbr_spike = train_part["nbr_r1_spike_vs_roll7"].fillna(0).values > 1.0
+        sample_weight[pos_mask & nbr_spike] *= NEIGHBOR_SPIKE_POSITIVE_WEIGHT_BOOST
+    sample_weight = np.clip(sample_weight, 1.0, MAX_SAMPLE_WEIGHT_MULTIPLIER).astype(np.float32)
 
     log.info("[ML] Train=%d  Calib=%d  Val=%d  Test=%d  features=%d",
              len(X_train), len(X_calib), len(X_val), len(X_test), len(feature_cols))
-    log.info("[ML] Dropped const/null=%d | Pos rate train=%.2f%% | scale_pos_weight raw=%.2f used=%.2f (power=%.2f)",
-             len(dropped), y_train.mean() * 100, raw_scale_pos_weight, scale_pos_weight, POS_WEIGHT_POWER)
-    log.info("[ML] Feature groups: spatial_nbr=%d temporal=%d criminology=%d",
+    log.info("[ML] Dropped const/null=%d | Hotspot train rate=%.3f%% | scale_pos_weight raw=%.2f used=%.2f",
+             len(dropped), y_train.mean() * 100, raw_scale_pos_weight, scale_pos_weight)
+    log.info("[ML] Feature groups: spatial_nbr=%d temporal=%d prior=%d shock=%d",
              sum("nbr" in c for c in feature_cols),
              sum(("roll" in c or "lag" in c or "ewm" in c) for c in feature_cols),
-             sum(any(x in c for x in ["near_repeat", "arrest_rate", "deterrence", "hardship_x", "unemployment_x", "contagion", "reactivation"]) for c in feature_cols))
+             sum(("prior" in c or "h3_train" in c or "comm_train" in c) for c in feature_cols),
+             sum(("shock" in c or "spike" in c or "activation" in c) for c in feature_cols))
 
     params = dict(XGB_PARAMS)
     params["scale_pos_weight"] = scale_pos_weight
@@ -1162,39 +1359,23 @@ def train_model(
 
     if USE_PRED_RATE_GUARD:
         best_t, best_f1_calib, thr_df = find_best_threshold_guarded(y_calib.values, calib_prob)
-        log.info("[ML] Calibrated threshold guarded: %.2f | F1_CALIB=%.4f | calib_base=%.4f",
+        log.info("[ML] Calibrated diagnostic threshold guarded: %.2f | F1_CALIB=%.4f | calib_base=%.4f",
                  best_t, best_f1_calib, float(y_calib.mean()))
-        try:
-            near = thr_df.iloc[(thr_df["threshold"] - best_t).abs().argsort()[:5]].sort_values("threshold")
-            log.info("[ML] Threshold candidates near best:\n%s", near.to_string(index=False))
-        except Exception:
-            pass
     else:
         best_t, best_f1_calib = find_best_threshold(y_calib.values, calib_prob)
-        log.info("[ML] Calibrated threshold F1-only: %.2f | F1_CALIB=%.4f", best_t, best_f1_calib)
+        log.info("[ML] Calibrated diagnostic threshold F1-only: %.2f | F1_CALIB=%.4f", best_t, best_f1_calib)
 
-    val_pred  = (val_prob  >= best_t).astype(int)
-    test_pred = (test_prob >= best_t).astype(int)
+    val_res = evaluate_ranker(df.loc[val_mask], y_val.values, val_prob, best_t)
+    test_res = evaluate_ranker(df.loc[test_mask], y_test.values, test_prob, best_t)
 
-    def _metrics(y_true, y_pred, y_prob):
-        return {
-            "precision": float(precision_score(y_true, y_pred, zero_division=0)),
-            "recall":    float(recall_score(y_true,    y_pred, zero_division=0)),
-            "f1":        float(f1_score(y_true,        y_pred, zero_division=0)),
-            "auc":       float(roc_auc_score(y_true, y_prob)),
-            "ap":        float(average_precision_score(y_true, y_prob)),
-            "pred_rate": float(np.mean(y_pred)),
-        }
-
-    val_res  = _metrics(y_val.values,  val_pred,  val_prob)
-    test_res = _metrics(y_test.values, test_pred, test_prob)
-
-    log.info("[ML] VAL  – P=%.4f R=%.4f F1=%.4f AUC=%.4f AP=%.4f pred_rate=%.3f",
-             val_res["precision"], val_res["recall"], val_res["f1"],
-             val_res["auc"], val_res["ap"], val_res["pred_rate"])
-    log.info("[ML] TEST – P=%.4f R=%.4f F1=%.4f AUC=%.4f AP=%.4f pred_rate=%.3f",
-             test_res["precision"], test_res["recall"], test_res["f1"],
-             test_res["auc"], test_res["ap"], test_res["pred_rate"])
+    log.info("[ML] VAL  – AUC=%.4f AP=%.4f F1=%.4f Top05_R=%.4f Top05_L=%.2fx Top15_R=%.4f Top30_R=%.4f",
+             val_res["auc"], val_res["ap"], val_res["f1"],
+             val_res["top05_recall"], val_res["top05_lift"],
+             val_res["top15_recall"], val_res["top30_recall"])
+    log.info("[ML] TEST – AUC=%.4f AP=%.4f F1=%.4f Top05_R=%.4f Top05_L=%.2fx Top15_R=%.4f Top30_R=%.4f",
+             test_res["auc"], test_res["ap"], test_res["f1"],
+             test_res["top05_recall"], test_res["top05_lift"],
+             test_res["top15_recall"], test_res["top30_recall"])
 
     return model, feature_cols, train_medians, best_t, val_res, test_res, scale_pos_weight
 
@@ -1213,8 +1394,8 @@ def build_predictions(
     test_res: dict,
 ) -> pd.DataFrame:
     """
-    Dùng features từ ngày mới nhất → dự báo ngày tiếp theo.
-    Output đúng schema prediction_results.
+    Use the latest feature day to forecast the next day.
+    Risk levels are assigned by rank-bounded top-k policy, not fixed score bins.
     """
     latest_day = df["date"].max()
     next_day   = latest_day + pd.Timedelta(days=1)
@@ -1224,47 +1405,54 @@ def build_predictions(
              latest_day.date(), next_day.date(), len(df_latest))
 
     X_latest, _ = sanitize_numeric(df_latest, feature_cols, train_medians)
-    crime_prob  = model.predict_proba(X_latest)[:, 1]
+    hotspot_score = model.predict_proba(X_latest)[:, 1]
 
     out = df_latest[["h3_index"]].copy().reset_index(drop=True)
     out["prediction_date"]   = next_day.date()
-    out["crime_probability"] = crime_prob
-    out["risk_level"]        = risk_level_from_prob(pd.Series(crime_prob)).values
+    out["hotspot_score"]     = hotspot_score.astype(float)
+    out["crime_probability"] = out["hotspot_score"]  # backward-compatible column name
+    out["risk_rank"]         = out["hotspot_score"].rank(method="first", ascending=False).astype(int)
+    out["risk_rank_pct"]     = out["risk_rank"] / max(len(out), 1)
+    out["risk_level"]        = assign_dashboard_risk_levels_by_rank(out["hotspot_score"]).values
     out["model_version"]     = model_version_str()
     out["created_at"]        = pd.Timestamp.utcnow().isoformat()
+    out["pred_hotspot"]      = (out["hotspot_score"].values >= best_threshold).astype(int)
 
-    out["pred_has_crime"] = (crime_prob >= best_threshold).astype(int)
-    out["risk_rank"]      = (
-        pd.Series(crime_prob).rank(method="first", ascending=False).astype(int).values
-    )
-    out["val_auc"]  = round(val_res["auc"],  4)
-    out["val_f1"]   = round(val_res["f1"],   4)
-    out["test_auc"] = round(test_res["auc"], 4)
-    out["test_f1"]  = round(test_res["f1"],  4)
+    # broadcast model diagnostics to every output row for simple dashboard display.
+    metric_map = {
+        "val_auc": val_res.get("auc", np.nan), "val_ap": val_res.get("ap", np.nan), "val_f1": val_res.get("f1", np.nan),
+        "test_auc": test_res.get("auc", np.nan), "test_ap": test_res.get("ap", np.nan), "test_f1": test_res.get("f1", np.nan),
+        "val_top05_recall": val_res.get("top05_recall", np.nan), "val_top05_lift": val_res.get("top05_lift", np.nan),
+        "val_top15_recall": val_res.get("top15_recall", np.nan), "val_top15_lift": val_res.get("top15_lift", np.nan),
+        "val_top30_recall": val_res.get("top30_recall", np.nan), "val_top30_lift": val_res.get("top30_lift", np.nan),
+        "test_top05_recall": test_res.get("top05_recall", np.nan), "test_top05_lift": test_res.get("top05_lift", np.nan),
+        "test_top15_recall": test_res.get("top15_recall", np.nan), "test_top15_lift": test_res.get("top15_lift", np.nan),
+        "test_top30_recall": test_res.get("top30_recall", np.nan), "test_top30_lift": test_res.get("top30_lift", np.nan),
+    }
+    for k, v in metric_map.items():
+        out[k] = round(float(v), 4) if pd.notna(v) else np.nan
 
     ctx_cols = [
         "community_area", "hardship_index", "unemployment_rate", "population_density",
-         "h3_train_percentile", "h3_train_active_rate", "roll_mean_7", "roll_mean_30", "zero_streak",
+        "h3_train_percentile", "h3_train_active_rate", "roll_mean_7", "roll_mean_30", "zero_streak",
         "nbr_r1_mean", "nbr_r1_active_rate", "nbr_r1_active_count", "near_repeat_3d", "arrest_rate_7", "is_holiday",
     ]
+    latest_reset = df_latest.reset_index(drop=True)
     for c in ctx_cols:
-        if c in df_latest.columns:
-            out[c] = df_latest[c].values
+        if c in latest_reset.columns:
+            out[c] = latest_reset[c].values
 
     core = [
-        "prediction_date", "h3_index", "crime_probability",
+        "prediction_date", "h3_index", "crime_probability", "hotspot_score",
         "risk_level", "model_version", "created_at",
     ]
     extra = [c for c in out.columns if c not in core]
-    out   = out[core + extra].sort_values("crime_probability", ascending=False)
+    out = out[core + extra].sort_values("hotspot_score", ascending=False).reset_index(drop=True)
 
-    log.info("[ML] Predictions – cells=%d  predicted_crime=%d (%.1f%%)",
-             len(out),
-             out["pred_has_crime"].sum(),
-             out["pred_has_crime"].mean() * 100)
-    log.info("[ML] Risk distribution:\n%s",
-             out["risk_level"].value_counts()
-             .reindex(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).fillna(0).astype(int).to_string())
+    log.info("[ML] Predictions – cells=%d | diagnostic pred_hotspot=%d (%.1f%%)",
+             len(out), int(out["pred_hotspot"].sum()), out["pred_hotspot"].mean() * 100)
+    log.info("[ML] Rank-bounded risk distribution:\n%s",
+             out["risk_level"].value_counts().reindex(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).fillna(0).astype(int).to_string())
     return out
 
 
@@ -1317,58 +1505,38 @@ def train_and_predict(
     enriched_table:    str  = "enriched_crime_data",
     predictions_table: str  = "prediction_results",
     lookback_days:     int  = RECENT_DAYS_TO_KEEP,
-    model_output_path: str  = "/tmp/crime_model_v13.pkl",
+    model_output_path: str  = "/tmp/crime_model_v20.pkl",
     write_mode:        str  = "WRITE_TRUNCATE",
     **kwargs,
 ) -> dict:
     """
     Airflow PythonOperator callable.
 
-    Parameters
-    ----------
-    project_id        : GCP project ID
-    dataset           : BigQuery dataset name (e.g. 'cdash_warehouse')
-    enriched_table    : Source table (default 'enriched_crime_data')
-    predictions_table : Destination table (default 'prediction_results')
-    lookback_days     : How many days of history to pull (default 400)
-    model_output_path : Where to pickle the model for auditing
-    write_mode        : 'WRITE_TRUNCATE' (default) hoặc 'WRITE_APPEND'
-
-    Returns
-    -------
-    dict với val_auc, test_auc, val_f1, test_f1, n_predictions, threshold
+    BigData production version of the Kaggle v20-target-safe ranker.
+    Main target is next_hotspot = (next_total >= 2); output risk levels are
+    bounded by top-k ranking to keep HIGH/CRITICAL controlled.
     """
     log.info("=" * 72)
-    log.info("  Chicago Crime Hotspot Forecasting  –  ml_pipeline v13 dynamic-spatial")
-    log.info("  Target: next_has_crime = (next_total >= 1) | schema OK")
+    log.info("  Chicago Crime Hotspot Forecasting – ml_pipeline v20 target-safe")
+    log.info("  Target: next_hotspot = (next_total >= 2)")
+    log.info("  Dashboard risk: CRITICAL=top5%%, HIGH+=top15%%, MEDIUM+=top30%%")
     log.info("=" * 72)
 
-    # ── Step 1: Load data ─────────────────────────────────────────────────
-    client  = bigquery.Client(project=project_id)
-    df_raw  = load_enriched_data(
-        client, project_id, dataset, enriched_table, lookback_days
-    )
+    client = bigquery.Client(project=project_id)
+    df_raw = load_enriched_data(client, project_id, dataset, enriched_table, lookback_days)
 
-    # ── Step 2: Aggregate daily per H3 ───────────────────────────────────
     daily, all_h3 = aggregate_daily(df_raw)
-
-    # ── Step 3: Build neighbor maps ───────────────────────────────────────
     nbr_r1, nbr_r2, has_h3 = build_neighbor_maps(all_h3)
 
-    # ── Step 4: Define rolling split dates ───────────────────────────────
-    df_temp   = daily.sort_values(["h3_index", "date"]).reset_index(drop=True)
-    g_temp    = df_temp.groupby("h3_index", group_keys=False)
+    # Rolling split dates computed before feature engineering, exactly as Kaggle v20.
+    df_temp = daily.sort_values(["h3_index", "date"]).reset_index(drop=True)
+    g_temp = df_temp.groupby("h3_index", group_keys=False)
     df_temp["next_total"] = g_temp["total_crimes"].shift(-1)
-    supervised_dates = sorted(
-        pd.to_datetime(df_temp.loc[df_temp["next_total"].notna(), "date"].unique())
-    )
+    supervised_dates = sorted(pd.to_datetime(df_temp.loc[df_temp["next_total"].notna(), "date"].unique()))
     eligible = supervised_dates[MIN_HISTORY_DAYS:]
-
-    if len(eligible) < TRAIN_DAYS + TEST_DAYS + VAL_DAYS + CALIB_DAYS:
-        raise ValueError(
-            f"Not enough history ({len(eligible)} eligible days). "
-            f"Need at least {TRAIN_DAYS + TEST_DAYS + VAL_DAYS + CALIB_DAYS} days."
-        )
+    needed = TRAIN_DAYS + CALIB_DAYS + VAL_DAYS + TEST_DAYS
+    if len(eligible) < needed:
+        raise ValueError(f"Not enough history ({len(eligible)} eligible days). Need at least {needed} days.")
 
     test_dates  = eligible[-TEST_DAYS:]
     val_dates   = eligible[-(TEST_DAYS + VAL_DAYS):-TEST_DAYS]
@@ -1377,71 +1545,75 @@ def train_and_predict(
     train_start = max(0, train_end - TRAIN_DAYS)
     train_dates = eligible[train_start:train_end]
 
-    log.info("[ML] Split  Train: %s→%s (%d d)  Val: %s→%s  Test: %s→%s",
+    log.info("[ML] Split Train: %s→%s (%d d) Calib: %s→%s Val: %s→%s Test: %s→%s",
              train_dates[0].date(), train_dates[-1].date(), len(train_dates),
-             val_dates[0].date(),   val_dates[-1].date(),
-             test_dates[0].date(),  test_dates[-1].date())
+             calib_dates[0].date(), calib_dates[-1].date(),
+             val_dates[0].date(), val_dates[-1].date(),
+             test_dates[0].date(), test_dates[-1].date())
 
-    # ── Step 5: Feature engineering v13 ──────────────────────────────────
     df_feat = build_features(daily, all_h3, nbr_r1, nbr_r2, has_h3, train_dates)
 
-    # Add target
     g_feat = df_feat.groupby("h3_index", group_keys=False)
-    df_feat["next_total"]     = g_feat["total_crimes"].shift(-1)
+    df_feat["next_total"] = g_feat["total_crimes"].shift(-1)
     df_feat["next_has_crime"] = (df_feat["next_total"] >= 1).astype(np.int8)
+    df_feat["next_hotspot"] = (df_feat["next_total"] >= 2).astype(np.int8)
+    df_feat["next_topk_group"] = np.nan
+    supervised = df_feat["next_total"].notna()
+    df_feat.loc[supervised & (df_feat["next_total"] <= 0), "next_topk_group"] = 0
+    df_feat.loc[supervised & (df_feat["next_total"] == 1), "next_topk_group"] = 1
+    df_feat.loc[supervised & (df_feat["next_total"] >= 2), "next_topk_group"] = 2
+    df_feat["next_rank_pct"] = np.nan
 
-    # ── Step 6: Train model ───────────────────────────────────────────────
-    (
-        model, feature_cols, train_medians,
-        best_threshold, val_res, test_res, scale_pos_weight,
-    ) = train_model(df_feat, train_dates, calib_dates, val_dates, test_dates)
+    for name, dates in [("train", train_dates), ("calib", calib_dates), ("val", val_dates), ("test", test_dates)]:
+        m = df_feat["date"].isin(dates) & supervised
+        log.info("[ML] %s next_has_crime=%.2f%% | next_hotspot>=2=%.2f%%", name, df_feat.loc[m, "next_has_crime"].mean()*100, df_feat.loc[m, "next_hotspot"].mean()*100)
 
-    # ── Step 7: Build next-day predictions ───────────────────────────────
-    df_pred = build_predictions(
-        df_feat, model, feature_cols, train_medians,
-        best_threshold, val_res, test_res,
+    model, feature_cols, train_medians, best_threshold, val_res, test_res, scale_pos_weight = train_model(
+        df_feat, train_dates, calib_dates, val_dates, test_dates
     )
 
-    # ── Step 8: Write to BigQuery ─────────────────────────────────────────
+    df_pred = build_predictions(df_feat, model, feature_cols, train_medians, best_threshold, val_res, test_res)
     write_predictions_to_bq(client, df_pred, project_id, dataset, predictions_table, write_mode)
 
-    # ── Step 9: Persist model artifact ───────────────────────────────────
     meta = {
-        "version":          model_version_str(),
-        "feature_cols":     feature_cols,
-        "train_medians":    train_medians,
-        "best_threshold":   best_threshold,
+        "version": model_version_str(),
+        "target": "next_hotspot = next_total >= 2",
+        "risk_policy": "CRITICAL top5%, HIGH cumulative top15%, MEDIUM cumulative top30%",
+        "feature_cols": feature_cols,
+        "train_medians": train_medians,
+        "best_threshold_diagnostic": best_threshold,
         "scale_pos_weight": scale_pos_weight,
-        "train_dates":      train_dates,
-        "calib_dates":      calib_dates,
-        "val_dates":        val_dates,
-        "test_dates":       test_dates,
-        "xgb_params":       XGB_PARAMS,
-        "val_res":          val_res,
-        "test_res":         test_res,
+        "train_dates": train_dates,
+        "calib_dates": calib_dates,
+        "val_dates": val_dates,
+        "test_dates": test_dates,
+        "xgb_params": XGB_PARAMS,
+        "val_res": val_res,
+        "test_res": test_res,
         "has_h3_spillover": has_h3,
-        "neighbor_map_r1":  nbr_r1 if has_h3 else {},
-        "neighbor_map_r2":  nbr_r2 if has_h3 else {},
     }
     os.makedirs(os.path.dirname(model_output_path) or ".", exist_ok=True)
     with open(model_output_path, "wb") as f:
         pickle.dump({"model": model, "meta": meta}, f)
     log.info("[ML] Model artifact saved → %s", model_output_path)
 
-    # ── Summary ───────────────────────────────────────────────────────────
+    risk_counts = df_pred["risk_level"].value_counts().to_dict()
     log.info("=" * 72)
-    log.info("  SUMMARY v13 dynamic-spatial")
-    log.info("  VAL  AUC=%.4f  F1=%.4f  AP=%.4f", val_res["auc"],  val_res["f1"],  val_res["ap"])
-    log.info("  TEST AUC=%.4f  F1=%.4f  AP=%.4f", test_res["auc"], test_res["f1"], test_res["ap"])
-    log.info("  Threshold (F1-calib)=%.2f  |  Predictions=%d", best_threshold, len(df_pred))
+    log.info("  SUMMARY v20 target-safe")
+    log.info("  VAL  AUC=%.4f AP=%.4f F1=%.4f Top05_R=%.4f Top05_L=%.2fx Top15_R=%.4f Top30_R=%.4f",
+             val_res["auc"], val_res["ap"], val_res["f1"], val_res["top05_recall"], val_res["top05_lift"], val_res["top15_recall"], val_res["top30_recall"])
+    log.info("  TEST AUC=%.4f AP=%.4f F1=%.4f Top05_R=%.4f Top05_L=%.2fx Top15_R=%.4f Top30_R=%.4f",
+             test_res["auc"], test_res["ap"], test_res["f1"], test_res["top05_recall"], test_res["top05_lift"], test_res["top15_recall"], test_res["top30_recall"])
+    log.info("  Risk counts: %s", risk_counts)
     log.info("=" * 72)
 
     return {
-        "val_auc":      val_res["auc"],
-        "val_f1":       val_res["f1"],
-        "test_auc":     test_res["auc"],
-        "test_f1":      test_res["f1"],
-        "threshold":    best_threshold,
+        "val_auc": val_res["auc"], "val_ap": val_res["ap"], "val_f1": val_res["f1"],
+        "test_auc": test_res["auc"], "test_ap": test_res["ap"], "test_f1": test_res["f1"],
+        "val_top05_recall": val_res["top05_recall"], "val_top05_lift": val_res["top05_lift"],
+        "test_top05_recall": test_res["top05_recall"], "test_top05_lift": test_res["top05_lift"],
+        "threshold_diagnostic": best_threshold,
+        "risk_counts": risk_counts,
         "n_predictions": len(df_pred),
         "model_version": model_version_str(),
     }
@@ -1464,7 +1636,7 @@ def make_airflow_callable(
     from ml_pipeline import make_airflow_callable
 
     run_ml = PythonOperator(
-        task_id="train_predict_v13",
+        task_id="train_predict_v20",
         python_callable=make_airflow_callable(
             project_id="sage-mind-489618-n5",
             dataset="cdash_warehouse",
@@ -1479,7 +1651,7 @@ def make_airflow_callable(
             enriched_table    = kwargs.get("enriched_table",    "enriched_crime_data"),
             predictions_table = kwargs.get("predictions_table", "prediction_results"),
             lookback_days     = kwargs.get("lookback_days",     RECENT_DAYS_TO_KEEP),
-            model_output_path = kwargs.get("model_output_path", "/tmp/crime_model_v13.pkl"),
+            model_output_path = kwargs.get("model_output_path", "/tmp/crime_model_v20.pkl"),
             write_mode        = kwargs.get("write_mode",        "WRITE_TRUNCATE"),
         )
     return _callable
@@ -1498,13 +1670,13 @@ if __name__ == "__main__":
         datefmt = "%H:%M:%S",
     )
 
-    parser = argparse.ArgumentParser(description="Crime Hotspot ML Pipeline v13")
+    parser = argparse.ArgumentParser(description="Crime Hotspot ML Pipeline v20 target-safe")
     parser.add_argument("--project",    required=True,  help="GCP Project ID")
     parser.add_argument("--dataset",    required=True,  help="BigQuery dataset")
     parser.add_argument("--enriched",   default="enriched_crime_data")
     parser.add_argument("--predictions",default="prediction_results")
     parser.add_argument("--lookback",   type=int, default=RECENT_DAYS_TO_KEEP)
-    parser.add_argument("--model_path", default="/tmp/crime_model_v13.pkl")
+    parser.add_argument("--model_path", default="/tmp/crime_model_v20.pkl")
     parser.add_argument("--write_mode", default="WRITE_TRUNCATE",
                         choices=["WRITE_TRUNCATE", "WRITE_APPEND"])
     args = parser.parse_args()
