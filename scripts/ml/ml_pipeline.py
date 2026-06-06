@@ -1,11 +1,11 @@
 """
-ml_pipeline.py – Crime Hotspot Forecasting v20 target-safe ranker
+ml_pipeline.py – Crime Hotspot Forecasting v24 groupblend confidence ranker
 =================================================================
 Airflow PythonOperator callable for BigData production.
 
 Pipeline:
   BigQuery enriched_crime_data → daily H3 grid → v20 feature engineering
-  → XGBoost binary HOTSPOT ranker → top-k dashboard risk levels
+  → temporal/spatial/context LightGBM GroupBlend HOTSPOT ranker → top-k dashboard risk levels
   → prediction_results BigQuery.
 
 Target:
@@ -21,7 +21,7 @@ This avoids the old failure mode where a fixed probability threshold could mark
 an excessive share of the city as HIGH/CRITICAL.
 
 Output schema keeps backward-compatible crime_probability and adds hotspot_score,
-TopK metrics, feature diagnostics and selected context fields.
+TopK metrics, GroupBlend scores, confidence fields and selected context fields.
 """
 
 from __future__ import annotations
@@ -37,13 +37,16 @@ import pandas as pd
 from google.cloud import bigquery
 
 warnings.filterwarnings("ignore")
-log = logging.getLogger("ML_Pipeline_v20_target_safe")
+log = logging.getLogger("ML_Pipeline_v24_groupblend_confidence")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 0.  CONSTANTS & CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-MODEL_VERSION_PREFIX = "hotspot_v20_target_safe_ranker"
+MODEL_VERSION_PREFIX = "hotspot_v24_groupblend_confidence"
+
+# Fixed GroupBlend_VAL_best from Kaggle Run 3.
+GROUP_BLEND_WEIGHTS = {"temporal": 0.1, "spatial": 0.6, "context": 0.3}
 
 # Rolling split windows (ngày)
 TRAIN_DAYS       = 220
@@ -142,6 +145,20 @@ BQ_PREDICTION_SCHEMA = [
     bigquery.SchemaField("pred_hotspot",      "INTEGER"),
     bigquery.SchemaField("risk_rank",         "INTEGER"),
     bigquery.SchemaField("risk_rank_pct",     "FLOAT"),
+    bigquery.SchemaField("confidence_score", "FLOAT"),
+    bigquery.SchemaField("confidence_level", "STRING"),
+    bigquery.SchemaField("temporal_score", "FLOAT"),
+    bigquery.SchemaField("spatial_score", "FLOAT"),
+    bigquery.SchemaField("context_score", "FLOAT"),
+    bigquery.SchemaField("group_score_std", "FLOAT"),
+    bigquery.SchemaField("group_score_range", "FLOAT"),
+    bigquery.SchemaField("model_agreement", "FLOAT"),
+    bigquery.SchemaField("score_margin_to_cutoff", "FLOAT"),
+    bigquery.SchemaField("rank_margin_confidence", "FLOAT"),
+    bigquery.SchemaField("rank_extremity", "FLOAT"),
+    bigquery.SchemaField("group_w_temporal", "FLOAT"),
+    bigquery.SchemaField("group_w_spatial", "FLOAT"),
+    bigquery.SchemaField("group_w_context", "FLOAT"),
     bigquery.SchemaField("val_auc",           "FLOAT"),
     bigquery.SchemaField("val_ap",            "FLOAT"),
     bigquery.SchemaField("val_f1",            "FLOAT"),
@@ -366,6 +383,49 @@ def evaluate_ranker(
 
 def model_version_str() -> str:
     return pd.Timestamp.now().strftime("%Y-%m-%d") + f".{MODEL_VERSION_PREFIX}"
+
+
+def feature_family_name(feature: str) -> str:
+    """Group feature names for GroupBlend and interpretability."""
+    f = str(feature)
+    if f in AUDIT_ONLY_PRIOR_BAND_FEATURES:
+        return "AUDIT_ONLY_PRIOR_BAND"
+    if any(x in f for x in ["h3_train", "comm_train", "prior", "active_rate_vs_train"]):
+        return "Spatial prior / prior-relative"
+    if f.startswith("sim_") or "sim_cluster" in f or "cluster_train" in f or "h3_vs_sim" in f:
+        return "Similarity graph"
+    if "parent_r" in f or "h3_vs_parent" in f or "h3_share_parent" in f:
+        return "Parent H3 multi-resolution"
+    if "nbr_" in f or "_nbr_" in f or "contagion" in f:
+        return "H3 neighbor spillover"
+    if any(x in f for x in ["roll", "lag", "ewm", "burst", "shock", "spike", "streak", "trend", "same_dow", "recent", "activation", "decay"]):
+        return "Temporal / momentum"
+    if any(x in f for x in ["near_repeat", "reactivation", "arrest", "deterrence", "violent", "property", "theft", "battery", "narcotics", "crime_type_entropy", "dominant_type"]):
+        return "Criminology behavior"
+    if any(x in f for x in ["holiday", "weekend", "friday", "monday", "dow_", "month_", "doy_"]):
+        return "Calendar / holiday"
+    if any(x in f for x in ["temp", "precip", "wind"]):
+        return "Weather"
+    if any(x in f for x in ["dist_nearest", "near_school", "near_station", "near_park", "near_nightlife", "nightlife"]):
+        return "POI interaction"
+    if any(x in f for x in ["hardship", "unemployment", "population", "income", "density", "per_1000pop"]):
+        return "Socioeconomic / density"
+    if any(x in f for x in ["city_", "comm_", "h3_city_share", "h3_recent_vs_comm"]):
+        return "City/community context"
+    if any(x in f for x in ["night", "evening", "morning", "afternoon"]):
+        return "Time-of-day profile"
+    return "Other"
+
+
+def feature_blend_bucket(feature: str) -> str:
+    fam = feature_family_name(feature)
+    if fam in {"Temporal / momentum", "Criminology behavior", "Calendar / holiday", "Time-of-day profile", "Weather"}:
+        return "temporal"
+    if fam in {"Spatial prior / prior-relative", "H3 neighbor spillover", "Similarity graph", "Parent H3 multi-resolution", "City/community context"}:
+        return "spatial"
+    if fam in {"Socioeconomic / density", "POI interaction"}:
+        return "context"
+    return "context"
 
 
 def reduce_mem_usage(
@@ -898,10 +958,14 @@ def build_features(
         r2_idx = [[cell_to_pos[x] for x in nbr_r2.get(cell, []) if x in cell_to_pos] for cell in cells_order]
 
         # Column-major reshape below matches h3 repeated outer / dates tiled inner.
+        r1_neighbor_counts = np.array([len(x) for x in r1_idx], dtype=np.float32)
+        r2_neighbor_counts = np.array([len(x) for x in r2_idx], dtype=np.float32)
         nbr_long = pd.DataFrame({
             "date": np.tile(dates_order.values, n_cells),
             "h3_index": np.repeat(cells_order.values.astype(str), n_dates),
         })
+        nbr_long["nbr_r1_neighbor_count"] = np.repeat(r1_neighbor_counts, n_dates).astype(np.float32)
+        nbr_long["nbr_r2_neighbor_count"] = np.repeat(r2_neighbor_counts, n_dates).astype(np.float32)
 
         def lag1_matrix(mat: np.ndarray) -> np.ndarray:
             out = np.zeros_like(mat, dtype=np.float32)
@@ -955,7 +1019,7 @@ def build_features(
         base_nbr_cols = [
             "nbr_r1_mean", "nbr_r1_sum", "nbr_r1_max", "nbr_r1_std",
             "nbr_r1_active_rate", "nbr_r1_active_count", "nbr_r1_any_active",
-            "nbr_r2_mean", "nbr_r1_roll7",
+            "nbr_r2_mean", "nbr_r1_roll7", "nbr_r1_neighbor_count", "nbr_r2_neighbor_count",
         ]
         for c in base_nbr_cols:
             df[c] = df[c].fillna(0).astype("float32")
@@ -1019,10 +1083,13 @@ def build_features(
             df.get("local_sudden_activation_3d", 0)
         ).astype("float32")
         df["nbr_hot_count_per_neighbor"] = safe_ratio(
-            df["nbr_r1_active_count"], df["nbr_r1_active_rate"] * 0 + 6.0, default=0, clip=1
+            df["nbr_r1_active_count"],
+            df["nbr_r1_neighbor_count"].replace(0, np.nan),
+            default=0,
+            clip=1,
         ).astype("float32")
 
-        del nbr_long, crime_arr, active_arr, r1_idx, r2_idx
+        del nbr_long, crime_arr, active_arr, r1_idx, r2_idx, r1_neighbor_counts, r2_neighbor_counts
         gc.collect()
         log.info("[ML]     ✓ Spatial spillover features added, single-merge RAM-safe")
     else:
@@ -1052,13 +1119,13 @@ def build_features(
         "h3_train_sum", "h3_train_max",
     ]
     h3_prior["h3_train_percentile"]  = h3_prior["h3_train_mean"].rank(pct=True).astype("float32")
-    h3_prior["h3_train_active_rate"] = (
+    h3_active = (
         df.loc[train_mask_prior]
-        .groupby("h3_index")["crime_today"]
+        .groupby("h3_index", as_index=False)["crime_today"]
         .mean()
-        .reindex(h3_prior["h3_index"])
-        .values
+        .rename(columns={"crime_today": "h3_train_active_rate"})
     )
+    h3_prior = h3_prior.merge(h3_active, on="h3_index", how="left")
     df = df.merge(h3_prior, on="h3_index", how="left")
     del h3_prior
 
@@ -1242,15 +1309,21 @@ def train_model(
     test_dates:  list,
 ) -> tuple:
     """
-    Train XGBoost v20 target-safe HOTSPOT ranker.
+    Train v24 fixed GroupBlend ranker.
 
-    Main target: next_hotspot = (next_total >= 2).
-    Threshold metrics are diagnostic; production dashboard uses rank-bounded top-k groups.
-    Returns: (model, feature_cols, train_medians, best_threshold, val_res, test_res, scale_pos_weight)
+    The final score is a weighted blend of three LightGBM group models:
+      score = 0.1 * temporal + 0.6 * spatial + 0.3 * context
+
+    Weights are fixed from Kaggle Run 3 GroupBlend_VAL_best and are not selected
+    on TEST. Threshold remains diagnostic; dashboard uses top-k rank bands.
+    Returns: (artifact, feature_cols, train_medians, threshold, val_res, test_res, sample_weight_info)
     """
-    import xgboost as xgb
+    try:
+        import lightgbm as lgb
+    except Exception as e:
+        raise RuntimeError("LightGBM is required for v24 GroupBlend. Install lightgbm in the Airflow image.") from e
 
-    log.info("[ML] Preparing train/calib/val/test splits for v20 HOTSPOT ranker...")
+    log.info("[ML] Preparing train/calib/val/test splits for v24 GroupBlend ranker...")
 
     ID_COLS = {"h3_index", "date"}
     TARGET_COLS = {"next_total", "next_has_crime", "next_hotspot", "next_topk_group", "next_rank_pct"}
@@ -1258,9 +1331,7 @@ def train_model(
 
     feature_cols = [
         c for c in df.columns
-        if c not in exclude
-        and not c.startswith("next_")
-        and pd.api.types.is_numeric_dtype(df[c])
+        if c not in exclude and not c.startswith("next_") and pd.api.types.is_numeric_dtype(df[c])
     ]
 
     supervised = df["next_total"].notna()
@@ -1269,14 +1340,10 @@ def train_model(
     val_mask   = df["date"].isin(val_dates)   & supervised
     test_mask  = df["date"].isin(test_dates)  & supervised
 
-    # v20: prior damping and audit-only guard to reduce hotspot memorization.
     redundant_priors = {"h3_train_sum", "h3_train_max", "h3_train_pct", "comm_train_sum", "comm_train_max"}
     strong_raw_priors = {"h3_train_mean", "h3_train_std", "comm_train_mean", "comm_train_std"}
     long_memory_sums = {"roll_sum_60", "roll_sum_90"}
-    direct_static = {
-        "community_area", "latitude", "longitude", "day_of_week", "month",
-        "median_income", "per_capita_income",
-    }
+    direct_static = {"community_area", "latitude", "longitude", "day_of_week", "month", "median_income", "per_capita_income"}
     removed = set()
     if DROP_REDUNDANT_PRIOR_FEATURES:
         removed |= redundant_priors
@@ -1291,7 +1358,6 @@ def train_model(
     feature_cols = [c for c in feature_cols if c not in removed]
     log.info("[ML] Removed guarded/redundant features: %d", len(removed))
 
-    # Drop constant / all-null features based on train only.
     keep, dropped = [], []
     for c in feature_cols:
         s = pd.to_numeric(df.loc[train_mask, c], errors="coerce")
@@ -1302,14 +1368,14 @@ def train_model(
     feature_cols = keep
 
     X_train, train_medians = sanitize_numeric(df.loc[train_mask], feature_cols)
-    X_calib, _             = sanitize_numeric(df.loc[calib_mask], feature_cols, train_medians)
-    X_val,   _             = sanitize_numeric(df.loc[val_mask],   feature_cols, train_medians)
-    X_test,  _             = sanitize_numeric(df.loc[test_mask],  feature_cols, train_medians)
+    X_calib, _ = sanitize_numeric(df.loc[calib_mask], feature_cols, train_medians)
+    X_val, _   = sanitize_numeric(df.loc[val_mask], feature_cols, train_medians)
+    X_test, _  = sanitize_numeric(df.loc[test_mask], feature_cols, train_medians)
 
     y_train = df.loc[train_mask, TARGET_COL].astype(int)
     y_calib = df.loc[calib_mask, TARGET_COL].astype(int)
-    y_val   = df.loc[val_mask,   TARGET_COL].astype(int)
-    y_test  = df.loc[test_mask,  TARGET_COL].astype(int)
+    y_val   = df.loc[val_mask, TARGET_COL].astype(int)
+    y_test  = df.loc[test_mask, TARGET_COL].astype(int)
 
     neg = int((y_train == 0).sum())
     pos = int((y_train == 1).sum())
@@ -1317,8 +1383,6 @@ def train_model(
     scale_pos_weight = min(CLASS_WEIGHT_CAP, raw_scale_pos_weight ** CLASS_WEIGHT_POWER)
     scale_pos_weight *= CLASS_WEIGHT_EXTRA_BOOST.get(1, 1.0)
 
-    # Sample weights: boost positives that are emerging / low-mid prior / neighbor-spike,
-    # using only train-only priors and past/current features.
     sample_weight = np.ones(len(y_train), dtype=np.float32)
     train_part = df.loc[train_mask]
     pos_mask = y_train.values == 1
@@ -1332,93 +1396,187 @@ def train_model(
         sample_weight[pos_mask & nbr_spike] *= NEIGHBOR_SPIKE_POSITIVE_WEIGHT_BOOST
     sample_weight = np.clip(sample_weight, 1.0, MAX_SAMPLE_WEIGHT_MULTIPLIER).astype(np.float32)
 
-    log.info("[ML] Train=%d  Calib=%d  Val=%d  Test=%d  features=%d",
-             len(X_train), len(X_calib), len(X_val), len(X_test), len(feature_cols))
-    log.info("[ML] Dropped const/null=%d | Hotspot train rate=%.3f%% | scale_pos_weight raw=%.2f used=%.2f",
-             len(dropped), y_train.mean() * 100, raw_scale_pos_weight, scale_pos_weight)
-    log.info("[ML] Feature groups: spatial_nbr=%d temporal=%d prior=%d shock=%d",
-             sum("nbr" in c for c in feature_cols),
-             sum(("roll" in c or "lag" in c or "ewm" in c) for c in feature_cols),
-             sum(("prior" in c or "h3_train" in c or "comm_train" in c) for c in feature_cols),
-             sum(("shock" in c or "spike" in c or "activation" in c) for c in feature_cols))
+    feature_buckets = {
+        "temporal": [c for c in feature_cols if feature_blend_bucket(c) == "temporal"],
+        "spatial":  [c for c in feature_cols if feature_blend_bucket(c) == "spatial"],
+        "context":  [c for c in feature_cols if feature_blend_bucket(c) == "context"],
+    }
+    for gname in ["temporal", "spatial", "context"]:
+        if len(feature_buckets[gname]) < 5:
+            raise ValueError(f"Not enough features for {gname} group: {len(feature_buckets[gname])}")
 
-    params = dict(XGB_PARAMS)
-    params["scale_pos_weight"] = scale_pos_weight
-    model = xgb.XGBClassifier(**params)
-    model.fit(
-        X_train, y_train,
-        sample_weight=sample_weight,
-        eval_set=[(X_train, y_train), (X_calib, y_calib)],
-        verbose=200,
+    log.info("[ML] Train=%d Calib=%d Val=%d Test=%d features=%d dropped=%d",
+             len(X_train), len(X_calib), len(X_val), len(X_test), len(feature_cols), len(dropped))
+    log.info("[ML] Group features: temporal=%d spatial=%d context=%d",
+             len(feature_buckets["temporal"]), len(feature_buckets["spatial"]), len(feature_buckets["context"]))
+    log.info("[ML] Hotspot train rate=%.3f%% | scale_pos_weight raw=%.2f used=%.2f",
+             y_train.mean()*100, raw_scale_pos_weight, scale_pos_weight)
+
+    lgbm_params = dict(
+        n_estimators=2200, learning_rate=0.025, num_leaves=23, max_depth=-1,
+        min_child_samples=30, subsample=0.90, colsample_bytree=0.80,
+        reg_alpha=0.20, reg_lambda=4.0, objective="binary",
+        random_state=RANDOM_STATE, n_jobs=-1, class_weight=None, verbosity=-1,
     )
-    log.info("[ML] Training done. Best iteration: %s", getattr(model, "best_iteration", "n/a"))
 
-    calib_prob = model.predict_proba(X_calib)[:, 1]
-    val_prob   = model.predict_proba(X_val)[:, 1]
-    test_prob  = model.predict_proba(X_test)[:, 1]
+    group_models = {}
+    group_scores = {"calib": {}, "val": {}, "test": {}}
+    group_thresholds = {}
+
+    for group_name, cols in feature_buckets.items():
+        log.info("[ML] Training LGBM_%s with %d features", group_name, len(cols))
+        model_g = lgb.LGBMClassifier(**lgbm_params)
+        try:
+            model_g.fit(
+                X_train[cols], y_train,
+                sample_weight=sample_weight,
+                eval_set=[(X_calib[cols], y_calib)],
+                eval_metric="average_precision",
+                callbacks=[lgb.early_stopping(150, verbose=False), lgb.log_evaluation(0)],
+            )
+        except TypeError:
+            model_g.fit(X_train[cols], y_train, sample_weight=sample_weight, eval_set=[(X_calib[cols], y_calib)], eval_metric="average_precision")
+
+        calib_s = model_g.predict_proba(X_calib[cols])[:, 1].astype(np.float32)
+        val_s   = model_g.predict_proba(X_val[cols])[:, 1].astype(np.float32)
+        test_s  = model_g.predict_proba(X_test[cols])[:, 1].astype(np.float32)
+        thr_g, calib_f1_g, _ = find_best_threshold_guarded(y_calib.values, calib_s)
+        group_models[group_name] = {"model": model_g, "features": cols, "threshold": float(thr_g)}
+        group_scores["calib"][group_name] = calib_s
+        group_scores["val"][group_name] = val_s
+        group_scores["test"][group_name] = test_s
+        group_thresholds[group_name] = float(thr_g)
+        log.info("[ML] LGBM_%s threshold=%.3f calib_f1=%.4f", group_name, thr_g, calib_f1_g)
+
+    def blend(split_name: str) -> np.ndarray:
+        return (
+            GROUP_BLEND_WEIGHTS["temporal"] * group_scores[split_name]["temporal"]
+            + GROUP_BLEND_WEIGHTS["spatial"] * group_scores[split_name]["spatial"]
+            + GROUP_BLEND_WEIGHTS["context"] * group_scores[split_name]["context"]
+        ).astype(np.float32)
+
+    calib_score = blend("calib")
+    val_score = blend("val")
+    test_score = blend("test")
 
     if USE_PRED_RATE_GUARD:
-        best_t, best_f1_calib, thr_df = find_best_threshold_guarded(y_calib.values, calib_prob)
-        log.info("[ML] Calibrated diagnostic threshold guarded: %.2f | F1_CALIB=%.4f | calib_base=%.4f",
-                 best_t, best_f1_calib, float(y_calib.mean()))
+        best_t, best_f1_calib, _ = find_best_threshold_guarded(y_calib.values, calib_score)
     else:
-        best_t, best_f1_calib = find_best_threshold(y_calib.values, calib_prob)
-        log.info("[ML] Calibrated diagnostic threshold F1-only: %.2f | F1_CALIB=%.4f", best_t, best_f1_calib)
+        best_t, best_f1_calib = find_best_threshold(y_calib.values, calib_score)
+    log.info("[ML] GroupBlend diagnostic threshold=%.3f | F1_CALIB=%.4f | weights=%s", best_t, best_f1_calib, GROUP_BLEND_WEIGHTS)
 
-    val_res = evaluate_ranker(df.loc[val_mask], y_val.values, val_prob, best_t)
-    test_res = evaluate_ranker(df.loc[test_mask], y_test.values, test_prob, best_t)
+    val_res = evaluate_ranker(df.loc[val_mask], y_val.values, val_score, best_t)
+    test_res = evaluate_ranker(df.loc[test_mask], y_test.values, test_score, best_t)
 
     log.info("[ML] VAL  – AUC=%.4f AP=%.4f F1=%.4f Top05_R=%.4f Top05_L=%.2fx Top15_R=%.4f Top30_R=%.4f",
-             val_res["auc"], val_res["ap"], val_res["f1"],
-             val_res["top05_recall"], val_res["top05_lift"],
-             val_res["top15_recall"], val_res["top30_recall"])
+             val_res["auc"], val_res["ap"], val_res["f1"], val_res["top05_recall"], val_res["top05_lift"], val_res["top15_recall"], val_res["top30_recall"])
     log.info("[ML] TEST – AUC=%.4f AP=%.4f F1=%.4f Top05_R=%.4f Top05_L=%.2fx Top15_R=%.4f Top30_R=%.4f",
-             test_res["auc"], test_res["ap"], test_res["f1"],
-             test_res["top05_recall"], test_res["top05_lift"],
-             test_res["top15_recall"], test_res["top30_recall"])
+             test_res["auc"], test_res["ap"], test_res["f1"], test_res["top05_recall"], test_res["top05_lift"], test_res["top15_recall"], test_res["top30_recall"])
 
-    return model, feature_cols, train_medians, best_t, val_res, test_res, scale_pos_weight
+    artifact = {
+        "group_models": group_models,
+        "group_weights": GROUP_BLEND_WEIGHTS.copy(),
+        "feature_buckets": feature_buckets,
+        "feature_cols": feature_cols,
+        "group_thresholds": group_thresholds,
+        "dropped_features": dropped,
+    }
+    sample_weight_info = {"raw_scale_pos_weight": raw_scale_pos_weight, "used_scale_pos_weight": scale_pos_weight}
+    return artifact, feature_cols, train_medians, best_t, val_res, test_res, sample_weight_info
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 7.  INFERENCE: NEXT DAY PREDICTIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _predict_groupblend(df_part: pd.DataFrame, artifact: dict, train_medians: pd.Series) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """Predict GroupBlend score and component scores for any dataframe slice."""
+    feature_cols = artifact["feature_cols"]
+    X, _ = sanitize_numeric(df_part, feature_cols, train_medians)
+    group_scores: dict[str, np.ndarray] = {}
+    for group_name, info in artifact["group_models"].items():
+        cols = info["features"]
+        group_scores[group_name] = info["model"].predict_proba(X[cols])[:, 1].astype(np.float32)
+    weights = artifact["group_weights"]
+    score = (
+        weights["temporal"] * group_scores["temporal"]
+        + weights["spatial"] * group_scores["spatial"]
+        + weights["context"] * group_scores["context"]
+    ).astype(np.float32)
+    return score, group_scores
+
+
+def add_confidence_columns(out: pd.DataFrame, group_scores: dict[str, np.ndarray]) -> pd.DataFrame:
+    """Add deploy-oriented confidence diagnostics.
+
+    confidence_score combines:
+      1. model_agreement: lower std among temporal/spatial/context scores is safer;
+      2. rank_margin_confidence: farther from CRITICAL/HIGH/MEDIUM cutoffs is safer;
+      3. rank_extremity: very high/very low ranks are easier to defend than boundary cases.
+    """
+    out = out.copy()
+    out["temporal_score"] = group_scores["temporal"].astype(float)
+    out["spatial_score"] = group_scores["spatial"].astype(float)
+    out["context_score"] = group_scores["context"].astype(float)
+    out["group_w_temporal"] = GROUP_BLEND_WEIGHTS["temporal"]
+    out["group_w_spatial"] = GROUP_BLEND_WEIGHTS["spatial"]
+    out["group_w_context"] = GROUP_BLEND_WEIGHTS["context"]
+
+    stack = np.vstack([group_scores["temporal"], group_scores["spatial"], group_scores["context"]]).T
+    out["group_score_std"] = stack.std(axis=1).astype(float)
+    out["group_score_range"] = (stack.max(axis=1) - stack.min(axis=1)).astype(float)
+    out["model_agreement"] = np.clip(1.0 - 2.0 * out["group_score_std"].values, 0.0, 1.0)
+
+    cutoffs = np.array([DASHBOARD_TOP_CRITICAL, DASHBOARD_TOP_HIGH, DASHBOARD_TOP_MEDIUM], dtype=np.float32)
+    rank_pct = out["risk_rank_pct"].to_numpy(dtype=np.float32)
+    nearest = np.min(np.abs(rank_pct[:, None] - cutoffs[None, :]), axis=1)
+    out["score_margin_to_cutoff"] = nearest.astype(float)
+    out["rank_margin_confidence"] = np.clip(nearest / DASHBOARD_TOP_CRITICAL, 0.0, 1.0)
+    out["rank_extremity"] = np.clip(np.abs(0.5 - rank_pct) * 2.0, 0.0, 1.0)
+
+    out["confidence_score"] = (
+        0.45 * out["model_agreement"].values
+        + 0.35 * out["rank_margin_confidence"].values
+        + 0.20 * out["rank_extremity"].values
+    ).clip(0.0, 1.0)
+    out["confidence_level"] = pd.cut(
+        out["confidence_score"],
+        bins=[-0.01, 0.50, 0.75, 1.01],
+        labels=["LOW", "MEDIUM", "HIGH"],
+    ).astype(str)
+    return out
+
+
 def build_predictions(
     df: pd.DataFrame,
-    model,
-    feature_cols: list[str],
+    artifact: dict,
     train_medians: pd.Series,
     best_threshold: float,
     val_res: dict,
     test_res: dict,
 ) -> pd.DataFrame:
-    """
-    Use the latest feature day to forecast the next day.
-    Risk levels are assigned by rank-bounded top-k policy, not fixed score bins.
-    """
+    """Use latest feature day to forecast next day with GroupBlend + confidence."""
     latest_day = df["date"].max()
-    next_day   = latest_day + pd.Timedelta(days=1)
-    df_latest  = df[df["date"].eq(latest_day)].copy().sort_values("h3_index")
+    next_day = latest_day + pd.Timedelta(days=1)
+    df_latest = df[df["date"].eq(latest_day)].copy().sort_values("h3_index")
 
-    log.info("[ML] Feature day: %s  →  Prediction day: %s  (%d H3 cells)",
-             latest_day.date(), next_day.date(), len(df_latest))
+    log.info("[ML] Feature day: %s → Prediction day: %s (%d H3 cells)", latest_day.date(), next_day.date(), len(df_latest))
 
-    X_latest, _ = sanitize_numeric(df_latest, feature_cols, train_medians)
-    hotspot_score = model.predict_proba(X_latest)[:, 1]
+    hotspot_score, group_scores = _predict_groupblend(df_latest, artifact, train_medians)
 
     out = df_latest[["h3_index"]].copy().reset_index(drop=True)
-    out["prediction_date"]   = next_day.date()
-    out["hotspot_score"]     = hotspot_score.astype(float)
-    out["crime_probability"] = out["hotspot_score"]  # backward-compatible column name
-    out["risk_rank"]         = out["hotspot_score"].rank(method="first", ascending=False).astype(int)
-    out["risk_rank_pct"]     = out["risk_rank"] / max(len(out), 1)
-    out["risk_level"]        = assign_dashboard_risk_levels_by_rank(out["hotspot_score"]).values
-    out["model_version"]     = model_version_str()
-    out["created_at"]        = pd.Timestamp.utcnow().isoformat()
-    out["pred_hotspot"]      = (out["hotspot_score"].values >= best_threshold).astype(int)
+    out["prediction_date"] = next_day.date()
+    out["hotspot_score"] = hotspot_score.astype(float)
+    out["crime_probability"] = out["hotspot_score"]
+    out["risk_rank"] = out["hotspot_score"].rank(method="first", ascending=False).astype(int)
+    out["risk_rank_pct"] = out["risk_rank"] / max(len(out), 1)
+    out["risk_level"] = assign_dashboard_risk_levels_by_rank(out["hotspot_score"]).values
+    out["model_version"] = model_version_str()
+    out["created_at"] = pd.Timestamp.utcnow().isoformat()
+    out["pred_hotspot"] = (out["hotspot_score"].values >= best_threshold).astype(int)
 
-    # broadcast model diagnostics to every output row for simple dashboard display.
+    out = add_confidence_columns(out, group_scores)
+
     metric_map = {
         "val_auc": val_res.get("auc", np.nan), "val_ap": val_res.get("ap", np.nan), "val_f1": val_res.get("f1", np.nan),
         "test_auc": test_res.get("auc", np.nan), "test_ap": test_res.get("ap", np.nan), "test_f1": test_res.get("f1", np.nan),
@@ -1444,15 +1602,14 @@ def build_predictions(
 
     core = [
         "prediction_date", "h3_index", "crime_probability", "hotspot_score",
-        "risk_level", "model_version", "created_at",
+        "risk_level", "confidence_level", "confidence_score", "model_version", "created_at",
     ]
     extra = [c for c in out.columns if c not in core]
     out = out[core + extra].sort_values("hotspot_score", ascending=False).reset_index(drop=True)
 
-    log.info("[ML] Predictions – cells=%d | diagnostic pred_hotspot=%d (%.1f%%)",
-             len(out), int(out["pred_hotspot"].sum()), out["pred_hotspot"].mean() * 100)
-    log.info("[ML] Rank-bounded risk distribution:\n%s",
-             out["risk_level"].value_counts().reindex(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).fillna(0).astype(int).to_string())
+    log.info("[ML] Predictions – cells=%d | diagnostic pred_hotspot=%d (%.1f%%)", len(out), int(out["pred_hotspot"].sum()), out["pred_hotspot"].mean() * 100)
+    log.info("[ML] Rank-bounded risk distribution:\n%s", out["risk_level"].value_counts().reindex(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).fillna(0).astype(int).to_string())
+    log.info("[ML] Confidence distribution:\n%s", out["confidence_level"].value_counts().reindex(["LOW", "MEDIUM", "HIGH"]).fillna(0).astype(int).to_string())
     return out
 
 
@@ -1505,19 +1662,19 @@ def train_and_predict(
     enriched_table:    str  = "enriched_crime_data",
     predictions_table: str  = "prediction_results",
     lookback_days:     int  = RECENT_DAYS_TO_KEEP,
-    model_output_path: str  = "/tmp/crime_model_v20.pkl",
+    model_output_path: str  = "/tmp/crime_model_v24_groupblend_confidence.pkl",
     write_mode:        str  = "WRITE_TRUNCATE",
     **kwargs,
 ) -> dict:
     """
     Airflow PythonOperator callable.
 
-    BigData production version of the Kaggle v20-target-safe ranker.
+    BigData production version of the Kaggle Run 4 GroupBlend confidence ranker.
     Main target is next_hotspot = (next_total >= 2); output risk levels are
     bounded by top-k ranking to keep HIGH/CRITICAL controlled.
     """
     log.info("=" * 72)
-    log.info("  Chicago Crime Hotspot Forecasting – ml_pipeline v20 target-safe")
+    log.info("  Chicago Crime Hotspot Forecasting – ml_pipeline v24 GroupBlend confidence")
     log.info("  Target: next_hotspot = (next_total >= 2)")
     log.info("  Dashboard risk: CRITICAL=top5%%, HIGH+=top15%%, MEDIUM+=top30%%")
     log.info("=" * 72)
@@ -1568,11 +1725,11 @@ def train_and_predict(
         m = df_feat["date"].isin(dates) & supervised
         log.info("[ML] %s next_has_crime=%.2f%% | next_hotspot>=2=%.2f%%", name, df_feat.loc[m, "next_has_crime"].mean()*100, df_feat.loc[m, "next_hotspot"].mean()*100)
 
-    model, feature_cols, train_medians, best_threshold, val_res, test_res, scale_pos_weight = train_model(
+    artifact, feature_cols, train_medians, best_threshold, val_res, test_res, sample_weight_info = train_model(
         df_feat, train_dates, calib_dates, val_dates, test_dates
     )
 
-    df_pred = build_predictions(df_feat, model, feature_cols, train_medians, best_threshold, val_res, test_res)
+    df_pred = build_predictions(df_feat, artifact, train_medians, best_threshold, val_res, test_res)
     write_predictions_to_bq(client, df_pred, project_id, dataset, predictions_table, write_mode)
 
     meta = {
@@ -1582,24 +1739,27 @@ def train_and_predict(
         "feature_cols": feature_cols,
         "train_medians": train_medians,
         "best_threshold_diagnostic": best_threshold,
-        "scale_pos_weight": scale_pos_weight,
+        "group_weights": GROUP_BLEND_WEIGHTS,
+        "sample_weight_info": sample_weight_info,
+        "group_weights": GROUP_BLEND_WEIGHTS,
         "train_dates": train_dates,
         "calib_dates": calib_dates,
         "val_dates": val_dates,
         "test_dates": test_dates,
-        "xgb_params": XGB_PARAMS,
+        "model_type": "GroupBlend LightGBM temporal/spatial/context",
         "val_res": val_res,
         "test_res": test_res,
         "has_h3_spillover": has_h3,
+        "artifact": artifact,
     }
     os.makedirs(os.path.dirname(model_output_path) or ".", exist_ok=True)
     with open(model_output_path, "wb") as f:
-        pickle.dump({"model": model, "meta": meta}, f)
+        pickle.dump({"artifact": artifact, "meta": meta}, f)
     log.info("[ML] Model artifact saved → %s", model_output_path)
 
     risk_counts = df_pred["risk_level"].value_counts().to_dict()
     log.info("=" * 72)
-    log.info("  SUMMARY v20 target-safe")
+    log.info("  SUMMARY v24 GroupBlend confidence")
     log.info("  VAL  AUC=%.4f AP=%.4f F1=%.4f Top05_R=%.4f Top05_L=%.2fx Top15_R=%.4f Top30_R=%.4f",
              val_res["auc"], val_res["ap"], val_res["f1"], val_res["top05_recall"], val_res["top05_lift"], val_res["top15_recall"], val_res["top30_recall"])
     log.info("  TEST AUC=%.4f AP=%.4f F1=%.4f Top05_R=%.4f Top05_L=%.2fx Top15_R=%.4f Top30_R=%.4f",
@@ -1613,6 +1773,7 @@ def train_and_predict(
         "val_top05_recall": val_res["top05_recall"], "val_top05_lift": val_res["top05_lift"],
         "test_top05_recall": test_res["top05_recall"], "test_top05_lift": test_res["top05_lift"],
         "threshold_diagnostic": best_threshold,
+        "group_weights": GROUP_BLEND_WEIGHTS,
         "risk_counts": risk_counts,
         "n_predictions": len(df_pred),
         "model_version": model_version_str(),
@@ -1636,7 +1797,7 @@ def make_airflow_callable(
     from ml_pipeline import make_airflow_callable
 
     run_ml = PythonOperator(
-        task_id="train_predict_v20",
+        task_id="train_predict_v24_groupblend",
         python_callable=make_airflow_callable(
             project_id="sage-mind-489618-n5",
             dataset="cdash_warehouse",
@@ -1651,7 +1812,7 @@ def make_airflow_callable(
             enriched_table    = kwargs.get("enriched_table",    "enriched_crime_data"),
             predictions_table = kwargs.get("predictions_table", "prediction_results"),
             lookback_days     = kwargs.get("lookback_days",     RECENT_DAYS_TO_KEEP),
-            model_output_path = kwargs.get("model_output_path", "/tmp/crime_model_v20.pkl"),
+            model_output_path = kwargs.get("model_output_path", "/tmp/crime_model_v24_groupblend_confidence.pkl"),
             write_mode        = kwargs.get("write_mode",        "WRITE_TRUNCATE"),
         )
     return _callable
@@ -1676,7 +1837,7 @@ if __name__ == "__main__":
     parser.add_argument("--enriched",   default="enriched_crime_data")
     parser.add_argument("--predictions",default="prediction_results")
     parser.add_argument("--lookback",   type=int, default=RECENT_DAYS_TO_KEEP)
-    parser.add_argument("--model_path", default="/tmp/crime_model_v20.pkl")
+    parser.add_argument("--model_path", default="/tmp/crime_model_v24_groupblend_confidence.pkl")
     parser.add_argument("--write_mode", default="WRITE_TRUNCATE",
                         choices=["WRITE_TRUNCATE", "WRITE_APPEND"])
     args = parser.parse_args()
