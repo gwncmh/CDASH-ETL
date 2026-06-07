@@ -1,0 +1,40 @@
+[2026-06-05T22:41:48.036+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ingest_chicago_crime manual__2026-06-05T17:42:56.298855+00:00 [queued]>
+[2026-06-05T22:41:48.045+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ingest_chicago_crime manual__2026-06-05T17:42:56.298855+00:00 [queued]>
+[2026-06-05T22:41:48.046+0000] {taskinstance.py:2170} INFO - Starting attempt 11 of 12
+[2026-06-05T22:41:48.061+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ingest_chicago_crime> on 2026-06-05 17:42:56.298855+00:00
+[2026-06-05T22:41:48.074+0000] {standard_task_runner.py:60} INFO - Started process 12944 to run task
+[2026-06-05T22:41:48.079+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ingest_chicago_crime', 'manual__2026-06-05T17:42:56.298855+00:00', '--job-id', '558', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp4ls93m0j']
+[2026-06-05T22:41:48.083+0000] {standard_task_runner.py:88} INFO - Job 558: Subtask ingest_chicago_crime
+[2026-06-05T22:41:48.162+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ingest_chicago_crime manual__2026-06-05T17:42:56.298855+00:00 [running]> on host db8b8170dea9
+[2026-06-05T22:41:48.289+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ingest_chicago_crime' AIRFLOW_CTX_EXECUTION_DATE='2026-06-05T17:42:56.298855+00:00' AIRFLOW_CTX_TRY_NUMBER='11' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-05T17:42:56.298855+00:00'
+[2026-06-05T22:41:49.152+0000] {ingest_chicago_crime.py:217} INFO - INCREMENTAL mode: 2026-05-16
+[2026-06-05T22:41:49.837+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-16] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:50.782+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-17] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:51.037+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-18] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:51.989+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-19] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:52.238+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-20] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:53.202+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-21] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:53.451+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-22] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:54.372+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-23] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:54.623+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-24] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:55.569+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-25] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:55.877+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-26] _SUCCESS marker exists, skipping.
+[2026-06-05T22:41:56.893+0000] {ingest_chicago_crime.py:114} INFO - [2026-05-27] Querying BigQuery...
+[2026-06-05T22:41:59.325+0000] {ingest_chicago_crime.py:142} INFO - [2026-05-27] Uploaded 20 rows → gs://chicago-crime-raw-group15/raw/chicago_crime/2026/05/27/data.csv
+[2026-06-05T22:42:00.257+0000] {ingest_chicago_crime.py:149} INFO - [2026-05-27] _SUCCESS marker written.
+[2026-06-05T22:42:00.533+0000] {ingest_chicago_crime.py:114} INFO - [2026-05-28] Querying BigQuery...
+[2026-06-05T22:42:01.848+0000] {ingest_chicago_crime.py:119} INFO - [2026-05-28] No data found, skipping.
+[2026-06-05T22:42:02.129+0000] {ingest_chicago_crime.py:103} INFO - [2026-05-29] _SUCCESS marker exists, skipping.
+[2026-06-05T22:42:03.245+0000] {ingest_chicago_crime.py:114} INFO - [2026-05-30] Querying BigQuery...
+[2026-06-05T22:42:04.948+0000] {ingest_chicago_crime.py:119} INFO - [2026-05-30] No data found, skipping.
+[2026-06-05T22:42:05.198+0000] {ingest_chicago_crime.py:114} INFO - [2026-05-31] Querying BigQuery...
+[2026-06-05T22:42:06.578+0000] {ingest_chicago_crime.py:119} INFO - [2026-05-31] No data found, skipping.
+[2026-06-05T22:42:06.862+0000] {ingest_chicago_crime.py:114} INFO - [2026-06-01] Querying BigQuery...
+[2026-06-05T22:42:08.245+0000] {ingest_chicago_crime.py:119} INFO - [2026-06-01] No data found, skipping.
+[2026-06-05T22:42:08.498+0000] {ingest_chicago_crime.py:114} INFO - [2026-06-02] Querying BigQuery...
+[2026-06-05T22:42:09.885+0000] {ingest_chicago_crime.py:119} INFO - [2026-06-02] No data found, skipping.
+[2026-06-05T22:42:09.886+0000] {ingest_chicago_crime.py:187} INFO - Ingestion complete: {'start_date': '2026-05-16', 'end_date': '2026-06-02', 'days_loaded': 1, 'days_skipped': 17, 'total_rows': 20}
+[2026-06-05T22:42:09.886+0000] {python.py:201} INFO - Done. Returned value was: None
+[2026-06-05T22:42:09.902+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=crime_analytics_pipeline, task_id=ingest_chicago_crime, execution_date=20260605T174256, start_date=20260605T224148, end_date=20260605T224209
+[2026-06-05T22:42:09.989+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-06-05T22:42:10.023+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

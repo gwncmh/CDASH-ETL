@@ -1,0 +1,103 @@
+[2026-06-07T16:46:15.568+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [queued]>
+[2026-06-07T16:46:15.581+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [queued]>
+[2026-06-07T16:46:15.582+0000] {taskinstance.py:2170} INFO - Starting attempt 24 of 25
+[2026-06-07T16:46:15.601+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-30 19:00:00+00:00
+[2026-06-07T16:46:15.613+0000] {standard_task_runner.py:60} INFO - Started process 15014 to run task
+[2026-06-07T16:46:15.618+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'scheduled__2026-05-30T19:00:00+00:00', '--job-id', '669', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpy2x087oi']
+[2026-06-07T16:46:15.623+0000] {standard_task_runner.py:88} INFO - Job 669: Subtask ml_train_and_predict
+[2026-06-07T16:46:15.711+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [running]> on host d26a8a58ef02
+[2026-06-07T16:46:15.841+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-30T19:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='24' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2026-05-30T19:00:00+00:00'
+[2026-06-07T16:46:16.706+0000] {ml_pipeline.py:2281} INFO - ========================================================================
+[2026-06-07T16:46:16.707+0000] {ml_pipeline.py:2282} INFO -   Chicago Crime Hotspot Forecasting – ml_pipeline v24 GroupBlend confidence
+[2026-06-07T16:46:16.708+0000] {ml_pipeline.py:2283} INFO -   Target: next_hotspot = (next_total >= 2)
+[2026-06-07T16:46:16.708+0000] {ml_pipeline.py:2284} INFO -   Dashboard risk: CRITICAL=top5%%, HIGH+=top15%%, MEDIUM+=top30%%
+[2026-06-07T16:46:16.709+0000] {ml_pipeline.py:2285} INFO -   + Feature importance logging per group  [v20]
+[2026-06-07T16:46:16.709+0000] {ml_pipeline.py:2286} INFO -   + Ablation study 6 scenarios            [v20]
+[2026-06-07T16:46:16.710+0000] {ml_pipeline.py:2287} INFO -   + Leak check assertions                 [v20]
+[2026-06-07T16:46:16.711+0000] {ml_pipeline.py:2288} INFO - ========================================================================
+[2026-06-07T16:46:16.762+0000] {ml_pipeline.py:1080} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-06-07T16:46:23.379+0000] {ml_pipeline.py:1155} INFO - [ML] Loaded 256869 rows, date range: 2025-04-21 → 2026-05-26
+[2026-06-07T16:46:23.380+0000] {ml_pipeline.py:1169} INFO - [ML] Aggregating daily per H3...
+[2026-06-07T16:46:26.954+0000] {ml_pipeline.py:1243} INFO - [ML] Daily grid: 341,652 rows, 852 H3 cells, 401 dates | RAM-safe downcast done
+[2026-06-07T16:46:27.000+0000] {ml_pipeline.py:1263} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.4
+[2026-06-07T16:46:27.073+0000] {ml_pipeline.py:2317} INFO - [ML] Split Train: 2025-09-06→2026-04-13 (220 d) Calib: 2026-04-14→2026-05-04 Val: 2026-05-05→2026-05-11 Test: 2026-05-12→2026-05-25
+[2026-06-07T16:46:27.074+0000] {ml_pipeline.py:2326} INFO - [LEAK_CHECK] train_dates: 2025-09-06 → 2026-04-13 (220 days)
+[2026-06-07T16:46:27.075+0000] {ml_pipeline.py:2328} INFO - [LEAK_CHECK] val_dates:   2026-05-05 → 2026-05-11 | test_dates: 2026-05-12 → 2026-05-25
+[2026-06-07T16:46:27.144+0000] {ml_pipeline.py:1287} INFO - [ML]   [4A] Own-cell lag/rolling features
+[2026-06-07T16:46:32.303+0000] {ml_pipeline.py:1330} INFO - [ML]   [4B] Burst/streak features
+[2026-06-07T16:46:32.542+0000] {ml_pipeline.py:1376} INFO - [ML]   [4C] Crime-type composition
+[2026-06-07T16:46:34.229+0000] {ml_pipeline.py:1393} INFO - [ML]   [4D] Weather/context features
+[2026-06-07T16:46:34.738+0000] {ml_pipeline.py:1409} INFO - [ML]   [4E] Community-level features
+[2026-06-07T16:46:35.600+0000] {ml_pipeline.py:1457} INFO - [ML]   [4F] City-level features
+[2026-06-07T16:46:36.265+0000] {ml_pipeline.py:1491} INFO - [ML]   [4G] H3 spatial spillover
+[2026-06-07T16:46:36.857+0000] {ml_pipeline.py:1563} INFO - [ML]     computing nbr_r1 mean/sum/max/std/active-count + r2 + roll7 ...
+[2026-06-07T16:46:39.421+0000] {ml_pipeline.py:1634} INFO - [ML]     ✓ Spatial spillover features added
+[2026-06-07T16:46:39.422+0000] {ml_pipeline.py:1649} INFO - [ML]   [4H] Train-only spatial priors
+[2026-06-07T16:46:40.320+0000] {ml_pipeline.py:1692} INFO - [ML]   [4I] Near-repeat victimization
+[2026-06-07T16:46:40.340+0000] {ml_pipeline.py:1705} INFO - [ML]   [4J] Cross-crime lead-lag
+[2026-06-07T16:46:40.347+0000] {ml_pipeline.py:1714} INFO - [ML]   [4K] Arrest deterrence
+[2026-06-07T16:46:40.543+0000] {ml_pipeline.py:1728} INFO - [ML]   [4L] Density-normalized crime
+[2026-06-07T16:46:40.550+0000] {ml_pipeline.py:1739} INFO - [ML]   [4M] Holiday/event features
+[2026-06-07T16:46:44.120+0000] {ml_pipeline.py:1748} INFO - [ML]   [4N] Momentum and trend direction
+[2026-06-07T16:46:45.949+0000] {ml_pipeline.py:1762} INFO - [ML]   [4O] Hardship interaction
+[2026-06-07T16:46:45.961+0000] {ml_pipeline.py:1774} INFO - [ML]   [4P] Prior-relative features
+[2026-06-07T16:46:45.974+0000] {ml_pipeline.py:1790} INFO - [ML] Feature engineering done. Shape: (341652, 296)
+[2026-06-07T16:46:45.989+0000] {ml_pipeline.py:2338} INFO - [LEAK_CHECK] h3_train_percentile mean — train=0.5006 val=0.5006 test=0.5006
+[2026-06-07T16:46:46.016+0000] {ml_pipeline.py:2358} INFO - [TYPE_CHECK] violent  next-day positive rate (train): 17.27%
+[2026-06-07T16:46:46.017+0000] {ml_pipeline.py:2359} INFO - [TYPE_CHECK] property next-day positive rate (train): 25.64%
+[2026-06-07T16:46:46.020+0000] {ml_pipeline.py:2360} INFO - [TYPE_CHECK] hotspot  next-day positive rate (train): 17.29%
+[2026-06-07T16:46:46.404+0000] {ml_pipeline.py:2367} INFO - [TYPE_CHECK] H3 cells có violent  crime trong train: 798/852 (93.7%)
+[2026-06-07T16:46:46.405+0000] {ml_pipeline.py:2370} INFO - [TYPE_CHECK] H3 cells có property crime trong train: 816/852 (95.8%)
+[2026-06-07T16:46:46.693+0000] {ml_pipeline.py:2379} INFO - [TYPE_CHECK] Trong hotspot: violent=59.0% property=80.6% cả hai=41.9%
+[2026-06-07T16:46:46.701+0000] {ml_pipeline.py:2387} INFO - [TYPE_CHECK] Correlation matrix:
+                    next_violent_flag  next_property_flag  next_hotspot
+next_violent_flag            1.000000            0.170971      0.504683
+next_property_flag           0.170971            1.000000      0.575971
+next_hotspot                 0.504683            0.575971      1.000000
+[2026-06-07T16:46:46.711+0000] {ml_pipeline.py:2398} INFO - [ML] train next_has_crime=39.83% | next_hotspot>=2=17.29%
+[2026-06-07T16:46:46.716+0000] {ml_pipeline.py:2398} INFO - [ML] calib next_has_crime=40.88% | next_hotspot>=2=18.07%
+[2026-06-07T16:46:46.720+0000] {ml_pipeline.py:2398} INFO - [ML] val next_has_crime=41.20% | next_hotspot>=2=18.44%
+[2026-06-07T16:46:46.723+0000] {ml_pipeline.py:2398} INFO - [ML] test next_has_crime=38.08% | next_hotspot>=2=18.89%
+[2026-06-07T16:46:47.694+0000] {ml_pipeline.py:1810} INFO - [ML] Preparing train/calib/val/test splits for v24 GroupBlend ranker...
+[2026-06-07T16:46:47.718+0000] {ml_pipeline.py:1838} INFO - [ML] Removed guarded/redundant features: 21
+[2026-06-07T16:46:51.141+0000] {ml_pipeline.py:1887} INFO - [ML] Train=187440 Calib=17892 Val=5964 Test=11928 features=273 dropped=7
+[2026-06-07T16:46:51.142+0000] {ml_pipeline.py:1889} INFO - [ML] Group features: temporal=168 spatial=40 context=65
+[2026-06-07T16:46:51.143+0000] {ml_pipeline.py:1891} INFO - [ML] Hotspot train rate=17.293% | scale_pos_weight raw=4.78 used=3.74
+[2026-06-07T16:46:51.144+0000] {ml_pipeline.py:1901} INFO - [ML] Training LGBM_temporal with 168 features
+[2026-06-07T16:46:56.235+0000] {local_task_job_runner.py:280} WARNING - Recorded pid 15098 does not match the current pid 15014
+[2026-06-07T16:46:56.248+0000] {process_utils.py:131} INFO - Sending 15 to group 15014. PIDs of all processes in the group: [15014]
+[2026-06-07T16:46:56.255+0000] {process_utils.py:86} INFO - Sending the signal 15 to group 15014
+[2026-06-07T16:46:56.259+0000] {taskinstance.py:2450} ERROR - Received SIGTERM. Terminating subprocesses.
+[2026-06-07T16:46:56.274+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/dag_crime_pipeline.py", line 290, in _run_ml_pipeline
+    result = train_and_predict(
+             ^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 2404, in train_and_predict
+    train_model(df_feat, train_dates, calib_dates, val_dates, test_dates)
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1904, in train_model
+    model_g.fit(
+  File "/home/airflow/.local/lib/python3.11/site-packages/lightgbm/sklearn.py", line 1560, in fit
+    super().fit(
+  File "/home/airflow/.local/lib/python3.11/site-packages/lightgbm/sklearn.py", line 1049, in fit
+    self._Booster = train(
+                    ^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/lightgbm/engine.py", line 322, in train
+    booster.update(fobj=fobj)
+  File "/home/airflow/.local/lib/python3.11/site-packages/lightgbm/basic.py", line 4155, in update
+    _LIB.LGBM_BoosterUpdateOneIter(
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 2452, in signal_handler
+    raise AirflowException("Task received SIGTERM signal")
+airflow.exceptions.AirflowException: Task received SIGTERM signal
+[2026-06-07T16:46:56.303+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260530T190000, start_date=20260607T164654, end_date=20260607T164656
+[2026-06-07T16:46:56.317+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 669 for task ml_train_and_predict (Task received SIGTERM signal; 15014)
+[2026-06-07T16:46:56.589+0000] {process_utils.py:79} INFO - Process psutil.Process(pid=15014, status='terminated', exitcode=1, started='16:46:14') (15014) terminated with exit code 1

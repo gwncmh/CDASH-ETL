@@ -26,8 +26,10 @@ if _zip not in sys.path:
     sys.path.insert(0, _zip)
 
 from utils.logger import get_logger
-from src import normalize_schema, clean_data, encode_spatial_features
-from src.deduplicator import remove_existing_records
+from schema_normalizer import normalize_schema
+from data_cleaner import clean_data
+from gis_encoder import encode_spatial_features
+from deduplicator import remove_existing_records
 
 logger = get_logger("Stage3_SubmitJob")
 
@@ -90,24 +92,38 @@ def main():
         known_args, _ = parser.parse_known_args()
 
         if known_args.ds:
-            from datetime import datetime
+            from datetime import datetime, timedelta
             d = datetime.strptime(known_args.ds, "%Y-%m-%d")
-            # Đọc đúng partition ngày đó thay vì toàn bộ Bronze
-            partition_path = (
-                f"{bronze_path}"
-                f"/part_year={d.year}"
-                f"/part_month={d.month}"
-                f"/part_day={d.day}"
-            )
+            end_date = d - timedelta(days=5)
+            start_date = end_date - timedelta(days=21)  # buffer đủ rộng để không bỏ sót
+            
+            # Đọc toàn bộ khoảng thay vì 1 partition
+            partition_paths = []
+            cur = start_date
+            while cur <= end_date:
+                partition_paths.append(
+                    f"{bronze_path}"
+                    f"/part_year={cur.year}"
+                    f"/part_month={cur.month}"
+                    f"/part_day={cur.day}"
+                )
+                cur += timedelta(days=1)
+            
+            # Lọc chỉ những partition thực sự tồn tại
             bucket_name = bronze_path.replace("gs://", "").split("/")[0]
-            prefix = partition_path.replace(f"gs://{bucket_name}/", "")
+            valid_paths = [
+                p for p in partition_paths
+                if partition_exists(bucket_name, p.replace(f"gs://{bucket_name}/", ""))
+            ]
             
-            if not partition_exists(bucket_name, prefix):
-                logger.info("Partition %s chưa có data. Stage 3 dừng sớm.", partition_path)
-                sys.exit(0)  # Thoát bình thường, không báo lỗi
+            if not valid_paths:
+                logger.info("Không có partition nào trong khoảng %s → %s. Stage 3 dừng sớm.",
+                            start_date.date(), end_date.date())
+                sys.exit(0)
             
-            logger.info(f"INCREMENTAL mode: chỉ đọc {partition_path}")
-            df_bronze = spark.read.parquet(partition_path)
+            logger.info("INCREMENTAL mode: đọc %d partitions từ %s → %s",
+                        len(valid_paths), start_date.date(), end_date.date())
+            df_bronze = spark.read.parquet(*valid_paths)
         else:
             logger.info(f"FULL LOAD mode: đọc toàn bộ {bronze_path}")
             df_bronze = spark.read.parquet(bronze_path)

@@ -101,6 +101,10 @@ def sql_forecast() -> str:
             pr.h3_index,
             pr.crime_probability,
             pr.risk_level,
+            pr.violent_probability,    -- thêm
+            pr.property_probability,   -- thêm
+            pr.dominant_type,          -- thêm
+            pr.confidence_level,       -- thêm nếu muốn
             pr.model_version,
             AVG(e.latitude)  AS latitude,
             AVG(e.longitude) AS longitude

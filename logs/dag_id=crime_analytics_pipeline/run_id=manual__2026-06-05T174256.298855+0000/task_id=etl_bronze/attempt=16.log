@@ -1,0 +1,76 @@
+[2026-06-05T22:56:03.795+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_bronze manual__2026-06-05T17:42:56.298855+00:00 [queued]>
+[2026-06-05T22:56:03.806+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_bronze manual__2026-06-05T17:42:56.298855+00:00 [queued]>
+[2026-06-05T22:56:03.807+0000] {taskinstance.py:2170} INFO - Starting attempt 16 of 17
+[2026-06-05T22:56:03.821+0000] {taskinstance.py:2191} INFO - Executing <Task(DataprocSubmitJobOperator): etl_bronze> on 2026-06-05 17:42:56.298855+00:00
+[2026-06-05T22:56:03.830+0000] {standard_task_runner.py:60} INFO - Started process 14361 to run task
+[2026-06-05T22:56:03.835+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'etl_bronze', 'manual__2026-06-05T17:42:56.298855+00:00', '--job-id', '563', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp870g6vl1']
+[2026-06-05T22:56:03.840+0000] {standard_task_runner.py:88} INFO - Job 563: Subtask etl_bronze
+[2026-06-05T22:56:03.929+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.etl_bronze manual__2026-06-05T17:42:56.298855+00:00 [running]> on host db8b8170dea9
+[2026-06-05T22:56:04.046+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='etl_bronze' AIRFLOW_CTX_EXECUTION_DATE='2026-06-05T17:42:56.298855+00:00' AIRFLOW_CTX_TRY_NUMBER='16' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-05T17:42:56.298855+00:00'
+[2026-06-05T22:56:04.048+0000] {dataproc.py:2208} INFO - Submitting job
+[2026-06-05T22:56:04.066+0000] {connection.py:234} WARNING - Connection schemes (type: google_cloud_platform) shall not contain '_' according to RFC3986.
+[2026-06-05T22:56:04.067+0000] {base.py:83} INFO - Using connection ID 'google_cloud_default' for task execution.
+[2026-06-05T22:56:05.670+0000] {dataproc.py:2220} INFO - Job d196edc6-a58c-40e7-a3ee-bab4da817a20 submitted successfully.
+[2026-06-05T22:56:05.714+0000] {dataproc.py:2254} INFO - Waiting for job d196edc6-a58c-40e7-a3ee-bab4da817a20 to complete
+[2026-06-05T22:58:35.477+0000] {local_task_job_runner.py:280} WARNING - Recorded pid 14710 does not match the current pid 14361
+[2026-06-05T22:58:35.481+0000] {process_utils.py:131} INFO - Sending 15 to group 14361. PIDs of all processes in the group: [14361]
+[2026-06-05T22:58:35.482+0000] {process_utils.py:86} INFO - Sending the signal 15 to group 14361
+[2026-06-05T22:58:35.483+0000] {taskinstance.py:2450} ERROR - Received SIGTERM. Terminating subprocesses.
+[2026-06-05T22:58:36.904+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 79, in error_remapped_callable
+    return callable_(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/grpc/_channel.py", line 1160, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/grpc/_channel.py", line 1003, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.FAILED_PRECONDITION
+	details = "com.google.cloud.hadoop.services.common.error.DataprocException: Cannot cancel jobId 'd196edc6-a58c-40e7-a3ee-bab4da817a20' in projectId 'sage-mind-489618-n5' in state: 'DONE'; cancellable states: '[PENDING, SETUP_DONE, RUNNING, ATTEMPT_FAILURE]' (FAILED_PRECONDITION) (CONFIG)"
+	debug_error_string = "UNKNOWN:Error received from peer ipv4:142.250.197.234:443 {created_time:"2026-06-05T22:58:36.902946159+00:00", grpc_status:9, grpc_message:"com.google.cloud.hadoop.services.common.error.DataprocException: Cannot cancel jobId \'d196edc6-a58c-40e7-a3ee-bab4da817a20\' in projectId \'sage-mind-489618-n5\' in state: \'DONE\'; cancellable states: \'[PENDING, SETUP_DONE, RUNNING, ATTEMPT_FAILURE]\' (FAILED_PRECONDITION) (CONFIG)"}"
+>
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 2255, in execute
+    self.hook.wait_for_job(
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 477, in inner_wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 716, in wait_for_job
+    time.sleep(wait_time)
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 2451, in signal_handler
+    self.task.on_kill()
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 2279, in on_kill
+    self.hook.cancel_job(job_id=self.job_id, project_id=self.project_id, region=self.region)
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 477, in inner_wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 822, in cancel_job
+    job = client.cancel_job(
+          ^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/cloud/dataproc_v1/services/job_controller/client.py", line 1198, in cancel_job
+    response = rpc(
+               ^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/gapic_v1/method.py", line 131, in __call__
+    return wrapped_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/retry.py", line 372, in retry_wrapped_func
+    return retry_target(
+           ^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/retry.py", line 207, in retry_target
+    result = target()
+             ^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 81, in error_remapped_callable
+    raise exceptions.from_grpc_error(exc) from exc
+google.api_core.exceptions.FailedPrecondition: 400 com.google.cloud.hadoop.services.common.error.DataprocException: Cannot cancel jobId 'd196edc6-a58c-40e7-a3ee-bab4da817a20' in projectId 'sage-mind-489618-n5' in state: 'DONE'; cancellable states: '[PENDING, SETUP_DONE, RUNNING, ATTEMPT_FAILURE]' (FAILED_PRECONDITION) (CONFIG)
+[2026-06-05T22:58:36.954+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=etl_bronze, execution_date=20260605T174256, start_date=20260605T225834, end_date=20260605T225836
+[2026-06-05T22:58:36.969+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 563 for task etl_bronze (400 com.google.cloud.hadoop.services.common.error.DataprocException: Cannot cancel jobId 'd196edc6-a58c-40e7-a3ee-bab4da817a20' in projectId 'sage-mind-489618-n5' in state: 'DONE'; cancellable states: '[PENDING, SETUP_DONE, RUNNING, ATTEMPT_FAILURE]' (FAILED_PRECONDITION) (CONFIG); 14361)
+[2026-06-05T22:58:36.996+0000] {process_utils.py:79} INFO - Process psutil.Process(pid=14361, status='terminated', exitcode=1, started='22:56:03') (14361) terminated with exit code 1

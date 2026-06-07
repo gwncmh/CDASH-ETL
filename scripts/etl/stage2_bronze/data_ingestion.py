@@ -5,6 +5,32 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_timestamp, year, month, dayofmonth, current_timestamp
 from pyspark.sql.functions import coalesce
 from google.cloud import storage
+from pyspark.sql.types import StructType, StructField, StringType, BooleanType, IntegerType, DoubleType
+
+BRONZE_SCHEMA = StructType([
+    StructField("unique_key",           IntegerType(), True),
+    StructField("case_number",          StringType(),  True),
+    StructField("date",                 StringType(),  True),
+    StructField("block",                StringType(),  True),
+    StructField("iucr",                 StringType(),  True),  # ← ép STRING, tránh bị infer INT
+    StructField("primary_type",         StringType(),  True),
+    StructField("description",          StringType(),  True),
+    StructField("location_description", StringType(),  True),
+    StructField("arrest",               BooleanType(), True),
+    StructField("domestic",             BooleanType(), True),
+    StructField("beat",                 IntegerType(), True),
+    StructField("district",             IntegerType(), True),
+    StructField("ward",                 IntegerType(), True),
+    StructField("community_area",       IntegerType(), True),
+    StructField("fbi_code",             StringType(),  True),
+    StructField("x_coordinate",         DoubleType(),  True),
+    StructField("y_coordinate",         DoubleType(),  True),
+    StructField("year",                 IntegerType(), True),
+    StructField("updated_on",           StringType(),  True),
+    StructField("latitude",             DoubleType(),  True),
+    StructField("longitude",            DoubleType(),  True),
+    StructField("location",             StringType(),  True),
+])
 
 MANDATORY_COLUMNS = [
     "unique_key", 
@@ -85,22 +111,38 @@ if __name__ == "__main__":
         .getOrCreate()
 
     if args.ds:
-        # Incremental: chỉ đọc đúng 1 ngày
+        from datetime import timedelta
         d = datetime.strptime(args.ds, "%Y-%m-%d")
-        raw_path = f"gs://chicago-crime-raw-group15/raw/chicago_crime/{d.year}/{d.month:02d}/{d.day:02d}/data.csv"
-        print(f"INCREMENTAL mode: chỉ xử lý {args.ds}")
+        
+        # Đồng bộ với Stage 3: end_date = ds - 5, start_date = end_date - 21
+        end_date = d - timedelta(days=5)
+        start_date = end_date - timedelta(days=21)
+        
+        print(f"INCREMENTAL mode: xử lý khoảng {start_date.date()} → {end_date.date()}")
+        
+        cur = start_date
+        while cur <= end_date:
+            marker_path = f"raw/chicago_crime/{cur.year}/{cur.month:02d}/{cur.day:02d}/_SUCCESS"
+            raw_path = f"gs://chicago-crime-raw-group15/raw/chicago_crime/{cur.year}/{cur.month:02d}/{cur.day:02d}/data.csv"
+            
+            if not file_exists_on_gcs("chicago-crime-raw-group15", marker_path):
+                print(f"No _SUCCESS marker for {cur.date()}, skipping.")
+                cur += timedelta(days=1)
+                continue
+            
+            print(f"Processing {cur.date()}...")
+            df_raw = spark.read.option("header", "true") \
+                            .schema(BRONZE_SCHEMA) \
+                            .csv(raw_path)
+            raw_validator(df_raw)
+            partition_writer(df_raw, args.bronze_path)
+            cur += timedelta(days=1)
+
     else:
         raw_path = args.raw_path
         print("FULL LOAD mode")
-
-    # Trước dòng df_raw = spark.read...
-    marker_path = f"raw/chicago_crime/{d.year}/{d.month:02d}/{d.day:02d}/_SUCCESS"
-    if not file_exists_on_gcs("chicago-crime-raw-group15", marker_path):
-        print(f"No _SUCCESS marker for {args.ds}, skipping Bronze stage.")
-        sys.exit(0)
-
-    df_raw = spark.read.option("header", "true") \
-                       .option("inferSchema", "true") \
-                       .csv(raw_path)
-    raw_validator(df_raw)
-    partition_writer(df_raw, args.bronze_path)
+        df_raw = spark.read.option("header", "true") \
+                        .option("inferSchema", "true") \
+                        .csv(raw_path)
+        raw_validator(df_raw)
+        partition_writer(df_raw, args.bronze_path)

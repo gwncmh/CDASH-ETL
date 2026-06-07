@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>CDASH – Crime Data Analytics & Spatial Hotspot Detection</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="../cdash_dashboard.css" />
+  <link rel="stylesheet" href="cdash_dashboard.css" />
 </head>
 <body>
 
@@ -57,375 +57,44 @@
 <!-- MAIN -->
 <main class="main">
 
-  <!-- TOPBAR -->
-  <div class="topbar">
-    <div class="topbar-title">CDASH / <span id="page-name">Tổng quan</span></div>
-    <div class="topbar-controls">
-      <select class="btn">
-        <option>Chicago – 2001 → nay</option>
-        <option>2024</option>
-        <option>2023</option>
-      </select>
-      <select class="btn">
-        <option>Tất cả loại tội phạm</option>
-        <option>THEFT</option>
-        <option>BATTERY</option>
-        <option>NARCOTICS</option>
-      </select>
-      <button class="btn btn-primary">▶ Trigger DAG</button>
-    </div>
+  <!-- ══ PAGE: OVERVIEW (UC1) ══ -->
+  <div class="page active fullpage" id="page-overview">
+    <iframe
+      class="fullpage-iframe"
+      src="https://datastudio.google.com/embed/reporting/227d0c5e-e760-46cb-ba6d-b6acfee4f5dc/page/YodzF"
+      allowfullscreen
+      sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox">
+    </iframe>
   </div>
 
-  <!-- ══ PAGE: OVERVIEW (UC1) ══ -->
-  <div class="page active" id="page-overview">
-
-    <!-- KPI -->
-    <div class="kpi-row">
-      <div class="kpi-card red">
-        <div class="kpi-label">Tổng vụ tội phạm</div>
-        <div class="kpi-value">—</div>
-        <div class="kpi-trend trend-neutral">— Chờ dữ liệu từ BigQuery</div>
-      </div>
-      <div class="kpi-card yellow">
-        <div class="kpi-label">Tháng này</div>
-        <div class="kpi-value">—</div>
-        <div class="kpi-trend trend-neutral">vs tháng trước: —</div>
-      </div>
-      <div class="kpi-card blue">
-        <div class="kpi-label">Tỷ lệ bắt giữ</div>
-        <div class="kpi-value">—%</div>
-        <div class="kpi-trend trend-neutral">— chờ fact_crimes</div>
-      </div>
-      <div class="kpi-card green">
-        <div class="kpi-label">Vùng nguy cao nhất</div>
-        <div class="kpi-value">—</div>
-        <div class="kpi-trend trend-neutral">— chờ H3 cluster</div>
-      </div>
-    </div>
-
-    <!-- Looker Studio embed area -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          📊 Looker Studio Dashboard
-          <span class="panel-tag">PLACEHOLDER</span>
-        </div>
-        <a href="https://lookerstudio.google.com" target="_blank" class="btn" style="font-size:10px;">Mở Looker Studio ↗</a>
-      </div>
-      <div class="panel-body">
-        <!--
-          ════════════════════════════════════════════════════════
-          KHI CÓ DỮ LIỆU: Thay block looker-placeholder bên dưới
-          bằng thẻ <iframe> như sau:
-
-          <iframe
-            class="looker-iframe"
-            src="https://lookerstudio.google.com/embed/reporting/YOUR_REPORT_ID/page/PAGE_ID"
-            allowfullscreen
-            sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox">
-          </iframe>
-          ════════════════════════════════════════════════════════
-        -->
-        <div class="looker-placeholder">
-          <div class="placeholder-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <path d="M3 9h18M9 21V9"/>
-            </svg>
-          </div>
-          <div class="placeholder-label">Looker Studio Embed</div>
-          <div class="placeholder-sub">
-            Thay thế vùng này bằng <code>&lt;iframe&gt;</code> từ Looker Studio sau khi kết nối BigQuery <code>cdash_warehouse</code>
-          </div>
-          <div class="placeholder-badge">src="https://lookerstudio.google.com/embed/reporting/{REPORT_ID}/page/{PAGE_ID}"</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 2 chart placeholders -->
-    <div class="grid-2">
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">Xu hướng theo tháng <span class="panel-tag">PLACEHOLDER</span></div>
-        </div>
-        <div class="chart-ph">
-          <!-- fake bars, replace bằng Looker chart hoặc chart.js -->
-          <div class="bar-ph" style="height:60%"></div>
-          <div class="bar-ph" style="height:45%"></div>
-          <div class="bar-ph" style="height:75%"></div>
-          <div class="bar-ph hi" style="height:90%"></div>
-          <div class="bar-ph" style="height:65%"></div>
-          <div class="bar-ph" style="height:50%"></div>
-          <div class="bar-ph hi" style="height:85%"></div>
-          <div class="bar-ph" style="height:55%"></div>
-          <div class="bar-ph" style="height:70%"></div>
-          <div class="bar-ph hi" style="height:95%"></div>
-          <div class="bar-ph" style="height:60%"></div>
-          <div class="bar-ph" style="height:40%"></div>
-        </div>
-        <div style="padding:0 24px 14px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em">
-          THÁNG 1 → 12 · Nguồn: fact_crimes.incident_date
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">Phân loại tội phạm <span class="panel-tag">PLACEHOLDER</span></div>
-        </div>
-        <div style="padding:24px">
-          <table class="mini-table">
-            <thead>
-              <tr><th>Loại</th><th>Số vụ</th><th>% tổng</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>THEFT</td><td style="color:var(--text)">—</td><td>—%</td></tr>
-              <tr><td>BATTERY</td><td style="color:var(--text)">—</td><td>—%</td></tr>
-              <tr><td>CRIMINAL DAMAGE</td><td style="color:var(--text)">—</td><td>—%</td></tr>
-              <tr><td>NARCOTICS</td><td style="color:var(--text)">—</td><td>—%</td></tr>
-              <tr><td>ASSAULT</td><td style="color:var(--text)">—</td><td>—%</td></tr>
-            </tbody>
-          </table>
-          <div style="margin-top:12px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em">
-            Nguồn: fact_crimes.primary_type · đã chuẩn hóa
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- /page-overview -->
-
-
   <!-- ══ PAGE: MAP (UC2) ══ -->
-  <div class="page" id="page-map">
-
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          🗺 Kepler.gl – Bản đồ không gian 3D
-          <span class="panel-tag green">PLACEHOLDER</span>
-        </div>
-        <div style="display:flex;gap:8px">
-          <a href="https://kepler.gl" target="_blank" class="btn" style="font-size:10px;">Mở Kepler.gl ↗</a>
-          <button class="btn" style="font-size:10px;">Export GeoJSON</button>
-        </div>
-      </div>
-      <div class="panel-body">
-        <!--
-          ════════════════════════════════════════════════════════
-          KHI CÓ DỮ LIỆU: Embed Kepler.gl theo một trong 2 cách:
-
-          CÁCH 1 – Deploy static HTML từ Kepler:
-          <iframe
-            class="looker-iframe"
-            style="height:620px"
-            src="./kepler_export.html">
-          </iframe>
-
-          CÁCH 2 – Dùng kepler.gl React component nếu dùng React app.
-          ════════════════════════════════════════════════════════
-        -->
-        <div class="kepler-placeholder">
-          <!-- fake blobs -->
-          <div class="blob blob-1"></div>
-          <div class="blob blob-2"></div>
-          <div class="blob blob-3"></div>
-          <div class="blob blob-4"></div>
-
-          <!-- Layer control -->
-          <div class="layer-panel">
-            <div class="layer-title">Lớp dữ liệu</div>
-            <div class="layer-item">
-              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
-              <div class="layer-dot" style="background:var(--accent)"></div>
-              Crime Heatmap
-            </div>
-            <div class="layer-item">
-              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
-              <div class="layer-dot" style="background:#3c8ee6"></div>
-              Thời tiết
-            </div>
-            <div class="layer-item">
-              <div class="toggle" onclick="this.classList.toggle('on')"></div>
-              <div class="layer-dot" style="background:#e6c63c"></div>
-              POI / Địa điểm
-            </div>
-            <div class="layer-item">
-              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
-              <div class="layer-dot" style="background:var(--accent2)"></div>
-              Dự báo AI
-            </div>
-          </div>
-
-          <!-- Center label -->
-          <div class="kepler-overlay">
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="opacity:.4">
-              <rect x="4" y="4" width="40" height="40" rx="4" stroke="#3ce6a0" stroke-width="1.5" stroke-dasharray="4 4"/>
-              <circle cx="24" cy="24" r="8" stroke="#3ce6a0" stroke-width="1.5" opacity=".5"/>
-            </svg>
-            <div class="kepler-label">Kepler.gl 3D Map</div>
-            <div class="kepler-sub">
-              Tải file <code>enriched_crime_data.geojson</code> vào Kepler.gl,<br>
-              hoặc embed iframe sau khi export từ BigQuery.
-            </div>
-            <div style="font-family:var(--mono);font-size:10px;color:var(--muted);border:1px dashed var(--muted);padding:4px 12px;border-radius:20px">
-              gs://cdash-data-lake/exports/enriched_crime_data.geojson
-            </div>
-          </div>
-
-          <!-- Fake playback bar -->
-          <div class="playback-bar">
-            <button class="play-btn">
-              <svg viewBox="0 0 12 12"><path d="M3 2l7 4-7 4z"/></svg>
-            </button>
-            <div class="timeline-label">2001-01</div>
-            <div class="timeline">
-              <div class="timeline-fill"></div>
-              <div class="timeline-thumb"></div>
-            </div>
-            <div class="timeline-label">2024-12</div>
-            <div class="timeline-label" style="color:var(--accent2)">Time-Playback</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- /page-map -->
-
+  <div class="page fullpage" id="page-map">
+    <!--
+      Thay src bên dưới bằng đường dẫn file kepler_export.html
+      sau khi bạn export từ Kepler.gl và host lên GitHub Pages hoặc GCS.
+      Ví dụ: src="./kepler_export.html"
+               hoặc src="https://YOUR_USERNAME.github.io/cdash/kepler_export.html"
+    -->
+    <iframe
+      class="fullpage-iframe"
+      src="./kepler_export.html"
+      allowfullscreen>
+    </iframe>
+  </div>
 
   <!-- ══ PAGE: HOTSPOT (UC3) ══ -->
-  <div class="page" id="page-hotspot">
-
-    <div class="kpi-row">
-      <div class="kpi-card red">
-        <div class="kpi-label">Vùng CRITICAL hôm nay</div>
-        <div class="kpi-value">—</div>
-        <div class="kpi-trend trend-neutral">— chờ prediction_results</div>
-      </div>
-      <div class="kpi-card yellow">
-        <div class="kpi-label">Vùng HIGH</div>
-        <div class="kpi-value">—</div>
-        <div class="kpi-trend trend-neutral">— chờ model XGBoost</div>
-      </div>
-      <div class="kpi-card blue">
-        <div class="kpi-label">Model version</div>
-        <div class="kpi-value" style="font-size:16px;margin-top:4px">—</div>
-        <div class="kpi-trend trend-neutral">YYYY-MM-DD.v{n}</div>
-      </div>
-      <div class="kpi-card green">
-        <div class="kpi-label">AUC-ROC</div>
-        <div class="kpi-value">—</div>
-        <div class="kpi-trend trend-neutral">Target ≥ 0.75</div>
-      </div>
-    </div>
-
-    <div class="grid-3">
-      <!-- Prediction table -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            Bảng dự báo điểm nóng
-            <span class="panel-tag">PLACEHOLDER</span>
-          </div>
-          <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">Nguồn: prediction_results</div>
-        </div>
-        <div class="panel-body">
-          <table class="mini-table">
-            <thead>
-              <tr>
-                <th>H3 Index</th>
-                <th>Xác suất</th>
-                <th>Rủi ro</th>
-                <th>Khu vực</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>—</code></td>
-                <td style="color:var(--text)">—</td>
-                <td><span class="risk-badge risk-critical">CRITICAL</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><code>—</code></td>
-                <td style="color:var(--text)">—</td>
-                <td><span class="risk-badge risk-high">HIGH</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><code>—</code></td>
-                <td style="color:var(--text)">—</td>
-                <td><span class="risk-badge risk-medium">MEDIUM</span></td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td><code>—</code></td>
-                <td style="color:var(--text)">—</td>
-                <td><span class="risk-badge risk-low">LOW</span></td>
-                <td>—</td>
-              </tr>
-            </tbody>
-          </table>
-          <div style="padding:12px 14px;font-family:var(--mono);font-size:9px;color:var(--muted)">
-            Dữ liệu sẽ cập nhật sau khi Airflow chạy job ML hàng ngày.
-            Kết nối bảng <code>cdash_warehouse.prediction_results</code>
-          </div>
-        </div>
-      </div>
-
-      <!-- Model info -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">Thông tin mô hình</div>
-        </div>
-        <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
-          <div>
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Algorithm</div>
-            <div style="font-size:13px;color:var(--text)">XGBoost Classifier</div>
-          </div>
-          <div>
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Features</div>
-            <div style="font-size:12px;color:var(--text-dim);line-height:1.7">
-              hour_of_day · day_of_week · month<br>
-              h3_index · dist_nearest_school<br>
-              crime_density_7d · crime_density_30d<br>
-              temp_max · precipitation<br>
-              hardship_index · unemployment_rate
-            </div>
-          </div>
-          <div>
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Schedule</div>
-            <div style="font-size:12px;color:var(--text-dim)">Train: weekly · Predict: daily</div>
-          </div>
-          <div>
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Model path</div>
-            <div style="font-size:11px;color:var(--accent2);font-family:var(--mono)">gs://cdash-data-lake/models/</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Forecast map placeholder -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          Bản đồ dự báo – ngày mai
-          <span class="panel-tag green">LOOKER / KEPLER</span>
-        </div>
-      </div>
-      <div class="kepler-placeholder" style="height:340px">
-        <div class="blob blob-1" style="opacity:.7"></div>
-        <div class="blob blob-2" style="opacity:.7"></div>
-        <div class="kepler-overlay">
-          <div class="kepler-label">Prediction Layer</div>
-          <div class="kepler-sub">
-            Lớp màu H3 theo <code>crime_probability</code><br>
-            từ bảng <code>prediction_results</code> sẽ xuất hiện ở đây.
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- /page-hotspot -->
-
+  <div class="page fullpage" id="page-hotspot">
+    <!--
+      Thay page/YodzF bằng ID page dự báo trong cùng Looker report.
+      Ví dụ: /page/ABCDE nếu bạn đã tạo page 2 trong report.
+    -->
+    <iframe
+      class="fullpage-iframe"
+      src="https://datastudio.google.com/embed/reporting/227d0c5e-e760-46cb-ba6d-b6acfee4f5dc/page/YodzF"
+      allowfullscreen
+      sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox">
+    </iframe>
+  </div>
 
   <!-- ══ PAGE: SETUP ══ -->
   <div class="page" id="page-setup">
@@ -440,7 +109,9 @@
           <div class="step-content">
             <div class="step-title">Tạo báo cáo Looker Studio</div>
             <div class="step-desc">
-              Vào <a href="https://lookerstudio.google.com" target="_blank" style="color:var(--accent2)">lookerstudio.google.com</a> → Create Report → chọn connector <b>BigQuery</b> → dataset <code>cdash_warehouse</code> → bảng <code>enriched_crime_data</code>.
+              Vào <a href="https://lookerstudio.google.com" target="_blank">lookerstudio.google.com</a>
+              → Create Report → chọn connector <b>BigQuery</b> → dataset
+              <code>cdash_warehouse</code> → bảng <code>enriched_crime_data</code>.
             </div>
           </div>
         </div>
@@ -448,9 +119,10 @@
         <div class="setup-step">
           <div class="step-num">2</div>
           <div class="step-content">
-            <div class="step-title">Lấy embed URL</div>
+            <div class="step-title">Tạo trang dự báo trong cùng report</div>
             <div class="step-desc">
-              Trong Looker Studio: File → Embed report → bật <b>Enable embedding</b> → copy URL dạng <code>https://lookerstudio.google.com/embed/reporting/{ID}/page/{PAGE}</code>.
+              Trong Looker Studio: nhấn <b>+</b> để thêm page mới → kết nối bảng
+              <code>prediction_results</code> → tạo bảng top rủi ro, biểu đồ xác suất theo H3.
             </div>
           </div>
         </div>
@@ -458,9 +130,11 @@
         <div class="setup-step">
           <div class="step-num">3</div>
           <div class="step-content">
-            <div class="step-title">Dán vào file HTML này</div>
+            <div class="step-title">Lấy embed URL từng trang</div>
             <div class="step-desc">
-              Tìm comment <code>&lt;!-- KHI CÓ DỮ LIỆU --&gt;</code> trong trang UC1 và UC3, thay khối <code>looker-placeholder</code> bằng thẻ <code>&lt;iframe class="looker-iframe" src="…"&gt;</code>.
+              File → Embed report → bật <b>Enable embedding</b> → copy URL dạng
+              <code>.../embed/reporting/{ID}/page/{PAGE_ID}</code>.
+              Mỗi trang có <code>PAGE_ID</code> khác nhau.
             </div>
           </div>
         </div>
@@ -468,9 +142,10 @@
         <div class="setup-step">
           <div class="step-num">4</div>
           <div class="step-content">
-            <div class="step-title">Export dữ liệu cho Kepler.gl</div>
+            <div class="step-title">Dán URL vào file HTML này</div>
             <div class="step-desc">
-              Chạy query BigQuery xuất <code>enriched_crime_data</code> → Save to GCS → script <code>auto_exporter.py</code> sẽ tạo file <code>enriched_crime_data.geojson</code> vào bucket.
+              Tìm hai thẻ <code>iframe</code> trong <code>page-overview</code> và
+              <code>page-hotspot</code>, thay thuộc tính <code>src</code> bằng URL tương ứng.
             </div>
           </div>
         </div>
@@ -478,9 +153,10 @@
         <div class="setup-step">
           <div class="step-num">5</div>
           <div class="step-content">
-            <div class="step-title">Tải GeoJSON vào Kepler.gl</div>
+            <div class="step-title">Export dữ liệu cho Kepler.gl</div>
             <div class="step-desc">
-              Mở <a href="https://kepler.gl/demo" target="_blank" style="color:var(--accent2)">kepler.gl/demo</a> → Add Data → tải file <code>.geojson</code>. Cấu hình H3 Layer + Heatmap. Save config JSON để tái sử dụng.
+              Chạy <code>POST /export/crimes</code> trên exporter service để tạo file
+              <code>crimes.geojson</code>. Hoặc query thẳng BigQuery → Save results → GCS.
             </div>
           </div>
         </div>
@@ -488,9 +164,35 @@
         <div class="setup-step">
           <div class="step-num">6</div>
           <div class="step-content">
-            <div class="step-title">Embed Kepler hoặc dùng GitHub Pages</div>
+            <div class="step-title">Cấu hình và export Kepler.gl</div>
             <div class="step-desc">
-              Export HTML từ Kepler (Share → Export Map) → host trên GitHub Pages → embed <code>&lt;iframe src="./kepler_export.html" style="height:620px"&gt;</code> vào trang UC2.
+              Mở <a href="https://kepler.gl/demo" target="_blank">kepler.gl/demo</a>
+              → Add Data → tải <code>crimes.geojson</code> → cấu hình H3 Layer + Heatmap
+              → Share → Export Map → lưu file <code>kepler_export.html</code>.
+            </div>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">7</div>
+          <div class="step-content">
+            <div class="step-title">Host Kepler export</div>
+            <div class="step-desc">
+              Đặt <code>kepler_export.html</code> cùng thư mục với dashboard này,
+              hoặc host lên GitHub Pages rồi cập nhật <code>src</code> của iframe
+              trong <code>page-map</code>.
+            </div>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">8</div>
+          <div class="step-content">
+            <div class="step-title">Kiểm tra pipeline Airflow</div>
+            <div class="step-desc">
+              Truy cập <code>http://localhost:8080</code> → bật DAG
+              <code>crime_analytics_pipeline</code> → trigger thủ công lần đầu.
+              Dashboard sẽ tự cập nhật theo lịch hàng ngày.
             </div>
           </div>
         </div>
@@ -507,8 +209,6 @@
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
     el.classList.add('active');
-    const names = {overview:'Tổng quan', map:'Bản đồ 3D', hotspot:'Dự báo điểm nóng', setup:'Cài đặt'};
-    document.getElementById('page-name').textContent = names[page] || page;
   }
 </script>
 </body>

@@ -1,0 +1,61 @@
+[2026-06-02T19:30:44.027+0000] {logging_mixin.py:188} INFO - Changing /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509
+[2026-06-02T19:30:44.027+0000] {logging_mixin.py:188} INFO - Failed to change /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509: [Errno 1] Operation not permitted: '/opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict'
+[2026-06-02T19:30:44.061+0000] {logging_mixin.py:188} INFO - Changing /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509
+[2026-06-02T19:30:44.062+0000] {logging_mixin.py:188} INFO - Failed to change /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509: [Errno 1] Operation not permitted: '/opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict'
+[2026-06-02T19:30:44.084+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-02T16:00:23.902592+00:00 [queued]>
+[2026-06-02T19:30:44.092+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-02T16:00:23.902592+00:00 [queued]>
+[2026-06-02T19:30:44.092+0000] {taskinstance.py:2170} INFO - Starting attempt 12 of 13
+[2026-06-02T19:30:44.103+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-06-02 16:00:23.902592+00:00
+[2026-06-02T19:30:44.112+0000] {standard_task_runner.py:60} INFO - Started process 3668 to run task
+[2026-06-02T19:30:44.116+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-06-02T16:00:23.902592+00:00', '--job-id', '491', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp_x7eel31']
+[2026-06-02T19:30:44.119+0000] {standard_task_runner.py:88} INFO - Job 491: Subtask ml_train_and_predict
+[2026-06-02T19:30:44.187+0000] {logging_mixin.py:188} INFO - Changing /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509
+[2026-06-02T19:30:44.188+0000] {logging_mixin.py:188} INFO - Failed to change /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509: [Errno 1] Operation not permitted: '/opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict'
+[2026-06-02T19:30:44.190+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-02T16:00:23.902592+00:00 [running]> on host db8b8170dea9
+[2026-06-02T19:30:44.284+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-06-02T16:00:23.902592+00:00' AIRFLOW_CTX_TRY_NUMBER='12' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-02T16:00:23.902592+00:00'
+[2026-06-02T19:30:45.186+0000] {ml_pipeline.py:1811} INFO - ========================================================================
+[2026-06-02T19:30:45.187+0000] {ml_pipeline.py:1812} INFO -   Chicago Crime Hotspot Forecasting – ml_pipeline v20 target-safe
+[2026-06-02T19:30:45.187+0000] {ml_pipeline.py:1813} INFO -   Target: next_hotspot = (next_total >= 2)
+[2026-06-02T19:30:45.188+0000] {ml_pipeline.py:1814} INFO -   Dashboard risk: CRITICAL=top5%%, HIGH+=top15%%, MEDIUM+=top30%%
+[2026-06-02T19:30:45.188+0000] {ml_pipeline.py:1815} INFO - ========================================================================
+[2026-06-02T19:30:45.240+0000] {ml_pipeline.py:441} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-06-02T19:30:51.653+0000] {ml_pipeline.py:517} INFO - [ML] Loaded 256909 rows, date range: 2025-04-13 → 2026-05-18
+[2026-06-02T19:30:51.654+0000] {ml_pipeline.py:531} INFO - [ML] Aggregating daily per H3...
+[2026-06-02T19:30:54.749+0000] {ml_pipeline.py:609} INFO - [ML] Daily grid: 341,652 rows, 852 H3 cells, 401 dates | RAM-safe downcast done
+[2026-06-02T19:30:54.791+0000] {ml_pipeline.py:633} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.4
+[2026-06-02T19:30:54.882+0000] {ml_pipeline.py:1840} INFO - [ML] Split Train: 2025-09-05→2026-04-12 (220 d) Calib: 2026-04-13→2026-05-03 Val: 2026-05-04→2026-05-10 Test: 2026-05-11→2026-05-17
+[2026-06-02T19:30:54.945+0000] {ml_pipeline.py:668} INFO - [ML]   [4A] Own-cell lag/rolling features
+[2026-06-02T19:30:58.967+0000] {ml_pipeline.py:713} INFO - [ML]   [4B] Burst/streak features
+[2026-06-02T19:30:59.183+0000] {ml_pipeline.py:761} INFO - [ML]   [4C] Crime-type composition
+[2026-06-02T19:31:00.738+0000] {ml_pipeline.py:778} INFO - [ML]   [4D] Weather/context features
+[2026-06-02T19:31:01.150+0000] {ml_pipeline.py:794} INFO - [ML]   [4E] Community-level features
+[2026-06-02T19:31:02.001+0000] {ml_pipeline.py:842} INFO - [ML]   [4F] City-level features
+[2026-06-02T19:31:02.534+0000] {ml_pipeline.py:876} INFO - [ML]   [4G] H3 spatial spillover v20 target-safe
+[2026-06-02T19:31:02.851+0000] {ml_pipeline.py:944} INFO - [ML]     computing nbr_r1 mean/sum/max/std/active-count + r2 + roll7 ...
+[2026-06-02T19:31:05.010+0000] {ml_pipeline.py:1028} INFO - [ML]     ✓ Spatial spillover features added, single-merge RAM-safe
+[2026-06-02T19:31:05.011+0000] {ml_pipeline.py:1043} INFO - [ML]   [4H] Train-only spatial priors
+[2026-06-02T19:31:05.414+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/dag_crime_pipeline.py", line 298, in _run_ml_pipeline
+    result = train_and_predict(
+             ^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1846, in train_and_predict
+    df_feat = build_features(daily, all_h3, nbr_r1, nbr_r2, has_h3, train_dates)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1065, in build_features
+    test_dates  = eligible[-TEST_DAYS:]
+                  ^^^^^^^^
+NameError: name 'eligible' is not defined
+[2026-06-02T19:31:05.442+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260602T160023, start_date=20260602T193044, end_date=20260602T193105
+[2026-06-02T19:31:05.474+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 491 for task ml_train_and_predict (name 'eligible' is not defined; 3668)
+[2026-06-02T19:31:05.664+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-06-02T19:31:05.693+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

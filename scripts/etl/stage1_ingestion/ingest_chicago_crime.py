@@ -208,12 +208,12 @@ def airflow_ingest_crime(
 
     if full_load:
         start = date.fromisoformat(full_load_start)
-        end   = date.today()
+        end   = date.today() 
         log.info("FULL LOAD mode: %s → %s", start, end)
     else:
-        target = date.fromisoformat(ds)
+        target = date.fromisoformat(ds) - timedelta(days=20)
         start  = target
-        end    = target
+        end    = target + timedelta(days=17)
         log.info("INCREMENTAL mode: %s", target)
 
     extract_range(

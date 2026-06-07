@@ -21,12 +21,11 @@ project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from src import (
-    calculate_rolling_features,
-    process_weather_data,
-    clean_socio_data,
-    process_poi_data,
-)
+from crime_aggregator import calculate_rolling_features
+from weather_process import process_weather_data
+from socio_process import clean_socio_data
+from poi_process import process_poi_data
+
 from utils.logger import get_logger
 
 logger = get_logger("Stage4_Gold_Main")
@@ -241,6 +240,7 @@ def main():
                 c.join_date                                          AS date,
                 c.primary_type,
                 c.community_area,
+                s.community_area_name,
                 c.h3_index,
                 c.latitude,
                 c.longitude,

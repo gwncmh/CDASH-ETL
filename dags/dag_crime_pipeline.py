@@ -1,14 +1,5 @@
 """
 dags/dag_crime_pipeline.py  (PATCHED)
-======================================
-Thay đổi duy nhất so với bản gốc:
-  - etl_silver: thêm --bronze_path và --silver_path vào args
-  - etl_gold  : thêm đầy đủ --project / --dataset / --bucket (đã có)
-                và bỏ --mode ra ngoài args list (truyền qua argparse)
-  - make_pyspark_job: không còn dùng is_single_file=True cho bronze
-    (giữ nguyên để tương thích, chỉ sửa phần args)
-
-Chỉ copy PHẦN THAY ĐỔI vào dag_crime_pipeline.py của bạn.
 """
 
 import sys
@@ -33,6 +24,7 @@ from config import (
     BQ_TABLE_WEATHER, BQ_TABLE_SOCIOECONOMIC,
     DATAPROC_CLUSTER_NAME, DATAPROC_MASTER_TYPE, DATAPROC_NUM_WORKERS,
     DATAPROC_WORKER_TYPE, GCP_CONN_ID, NOAA_API_TOKEN, NOAA_STATION_ID,
+    CHICAGO_COMMUNITY_AREA_NAMES
 )
 
 # ── Default args ───────────────────────────────────────────────────────────
@@ -237,7 +229,7 @@ def _ingest_socioeconomic(**kwargs):
     agg["hardship_index"]    = agg["poverty_rate"].round(0).astype("Int64")
     df_final = agg.rename(columns={"COMMAREA":"community_area","population":"population_density"})[
         ["community_area","per_capita_income","unemployment_rate","hardship_index","population_density"]]
-    df_final["community_area_name"] = ""
+    df_final["community_area_name"] = df_final["community_area"].map(CHICAGO_COMMUNITY_AREA_NAMES).fillna("")
     df_final = df_final[["community_area","community_area_name","per_capita_income",
                           "unemployment_rate","hardship_index","population_density"]]
 

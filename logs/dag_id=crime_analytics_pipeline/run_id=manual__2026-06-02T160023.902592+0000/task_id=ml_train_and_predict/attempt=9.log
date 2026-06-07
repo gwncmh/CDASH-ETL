@@ -1,0 +1,205 @@
+[2026-06-02T19:09:40.565+0000] {logging_mixin.py:188} INFO - Changing /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509
+[2026-06-02T19:09:40.566+0000] {logging_mixin.py:188} INFO - Failed to change /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509: [Errno 1] Operation not permitted: '/opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict'
+[2026-06-02T19:09:40.603+0000] {logging_mixin.py:188} INFO - Changing /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509
+[2026-06-02T19:09:40.604+0000] {logging_mixin.py:188} INFO - Failed to change /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509: [Errno 1] Operation not permitted: '/opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict'
+[2026-06-02T19:09:40.629+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-02T16:00:23.902592+00:00 [queued]>
+[2026-06-02T19:09:40.637+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-02T16:00:23.902592+00:00 [queued]>
+[2026-06-02T19:09:40.638+0000] {taskinstance.py:2170} INFO - Starting attempt 9 of 10
+[2026-06-02T19:09:40.649+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-06-02 16:00:23.902592+00:00
+[2026-06-02T19:09:40.657+0000] {standard_task_runner.py:60} INFO - Started process 3253 to run task
+[2026-06-02T19:09:40.662+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'manual__2026-06-02T16:00:23.902592+00:00', '--job-id', '484', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpizyw88xu']
+[2026-06-02T19:09:40.666+0000] {standard_task_runner.py:88} INFO - Job 484: Subtask ml_train_and_predict
+[2026-06-02T19:09:40.731+0000] {logging_mixin.py:188} INFO - Changing /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509
+[2026-06-02T19:09:40.732+0000] {logging_mixin.py:188} INFO - Failed to change /opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict permission to 509: [Errno 1] Operation not permitted: '/opt/***/logs/dag_id=crime_analytics_pipeline/run_id=manual__2026-06-02T16:00:23.902592+00:00/task_id=ml_train_and_predict'
+[2026-06-02T19:09:40.734+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict manual__2026-06-02T16:00:23.902592+00:00 [running]> on host db8b8170dea9
+[2026-06-02T19:09:40.833+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-06-02T16:00:23.902592+00:00' AIRFLOW_CTX_TRY_NUMBER='9' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-02T16:00:23.902592+00:00'
+[2026-06-02T19:09:42.276+0000] {ml_pipeline.py:1777} INFO - ========================================================================
+[2026-06-02T19:09:42.277+0000] {ml_pipeline.py:1778} INFO -   Chicago Crime Hotspot Forecasting – ml_pipeline v20 target-safe
+[2026-06-02T19:09:42.278+0000] {ml_pipeline.py:1779} INFO -   Target: next_hotspot = (next_total >= 2)
+[2026-06-02T19:09:42.278+0000] {ml_pipeline.py:1780} INFO -   Dashboard risk: CRITICAL=top5%%, HIGH+=top15%%, MEDIUM+=top30%%
+[2026-06-02T19:09:42.279+0000] {ml_pipeline.py:1781} INFO - ========================================================================
+[2026-06-02T19:09:42.343+0000] {ml_pipeline.py:441} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-06-02T19:09:48.817+0000] {ml_pipeline.py:517} INFO - [ML] Loaded 256909 rows, date range: 2025-04-13 → 2026-05-18
+[2026-06-02T19:09:48.818+0000] {ml_pipeline.py:531} INFO - [ML] Aggregating daily per H3...
+[2026-06-02T19:09:52.158+0000] {ml_pipeline.py:609} INFO - [ML] Daily grid: 341,652 rows, 852 H3 cells, 401 dates | RAM-safe downcast done
+[2026-06-02T19:09:52.233+0000] {ml_pipeline.py:633} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.4
+[2026-06-02T19:09:52.314+0000] {ml_pipeline.py:1806} INFO - [ML] Split Train: 2025-09-05→2026-04-12 (220 d) Calib: 2026-04-13→2026-05-03 Val: 2026-05-04→2026-05-10 Test: 2026-05-11→2026-05-17
+[2026-06-02T19:09:52.372+0000] {ml_pipeline.py:668} INFO - [ML]   [4A] Own-cell lag/rolling features
+[2026-06-02T19:09:58.488+0000] {ml_pipeline.py:713} INFO - [ML]   [4B] Burst/streak features
+[2026-06-02T19:09:58.662+0000] {ml_pipeline.py:761} INFO - [ML]   [4C] Crime-type composition
+[2026-06-02T19:10:00.296+0000] {ml_pipeline.py:778} INFO - [ML]   [4D] Weather/context features
+[2026-06-02T19:10:00.705+0000] {ml_pipeline.py:794} INFO - [ML]   [4E] Community-level features
+[2026-06-02T19:10:01.685+0000] {ml_pipeline.py:842} INFO - [ML]   [4F] City-level features
+[2026-06-02T19:10:02.392+0000] {ml_pipeline.py:876} INFO - [ML]   [4G] H3 spatial spillover v20 target-safe
+[2026-06-02T19:10:02.721+0000] {ml_pipeline.py:944} INFO - [ML]     computing nbr_r1 mean/sum/max/std/active-count + r2 + roll7 ...
+[2026-06-02T19:10:05.068+0000] {ml_pipeline.py:1028} INFO - [ML]     ✓ Spatial spillover features added, single-merge RAM-safe
+[2026-06-02T19:10:05.068+0000] {ml_pipeline.py:1043} INFO - [ML]   [4H] Train-only spatial priors
+[2026-06-02T19:10:06.593+0000] {ml_pipeline.py:1093} INFO - [ML]   [4I] Near-repeat victimization (Near-Repeat Theory)
+[2026-06-02T19:10:06.615+0000] {ml_pipeline.py:1106} INFO - [ML]   [4J] Cross-crime lead-lag (Escalation Theory)
+[2026-06-02T19:10:06.621+0000] {ml_pipeline.py:1119} INFO - [ML]   [4K] Arrest deterrence (Deterrence Theory)
+[2026-06-02T19:10:06.825+0000] {ml_pipeline.py:1145} INFO - [ML]   [4L] Density-normalized crime
+[2026-06-02T19:10:06.834+0000] {ml_pipeline.py:1162} INFO - [ML]   [4M] Holiday/event features (Routine Activity Theory)
+[2026-06-02T19:10:10.110+0000] {ml_pipeline.py:1172} INFO - [ML]   [4N] Momentum and trend direction
+[2026-06-02T19:10:11.826+0000] {ml_pipeline.py:1194} INFO - [ML]   [4O] Hardship interaction (Social Disorganization Theory)
+[2026-06-02T19:10:11.835+0000] {ml_pipeline.py:1210} INFO - [ML]   [4P] Prior-relative features
+[2026-06-02T19:10:11.845+0000] {ml_pipeline.py:1230} INFO - [ML] Feature engineering done. Shape: (341652, 294)
+[2026-06-02T19:10:11.869+0000] {ml_pipeline.py:1827} INFO - [ML] train next_has_crime=39.83% | next_hotspot>=2=17.30%
+[2026-06-02T19:10:11.873+0000] {ml_pipeline.py:1827} INFO - [ML] calib next_has_crime=40.85% | next_hotspot>=2=18.05%
+[2026-06-02T19:10:11.875+0000] {ml_pipeline.py:1827} INFO - [ML] val next_has_crime=41.43% | next_hotspot>=2=18.66%
+[2026-06-02T19:10:11.878+0000] {ml_pipeline.py:1827} INFO - [ML] test next_has_crime=34.93% | next_hotspot>=2=18.71%
+[2026-06-02T19:10:13.266+0000] {ml_pipeline.py:1422} INFO - [ML] Preparing train/calib/val/test splits for v20 HOTSPOT ranker...
+[2026-06-02T19:10:13.279+0000] {ml_pipeline.py:1461} INFO - [ML] Removed guarded/redundant features: 21
+[2026-06-02T19:10:15.714+0000] {ml_pipeline.py:1504} INFO - [ML] Train=187440  Calib=17892  Val=5964  Test=5964  features=271
+[2026-06-02T19:10:15.715+0000] {ml_pipeline.py:1506} INFO - [ML] Dropped const/null=7 | Hotspot train rate=17.299% | scale_pos_weight raw=4.78 used=3.74
+[2026-06-02T19:10:15.716+0000] {ml_pipeline.py:1508} INFO - [ML] Feature groups: spatial_nbr=28 temporal=151 prior=7 shock=9
+[2026-06-02T19:10:16.826+0000] {logging_mixin.py:188} INFO - [0]	validation_0-aucpr:0.53799	validation_1-aucpr:0.53680
+[2026-06-02T19:10:34.114+0000] {logging_mixin.py:188} INFO - [200]	validation_0-aucpr:0.56054	validation_1-aucpr:0.55788
+[2026-06-02T19:10:48.871+0000] {logging_mixin.py:188} INFO - [400]	validation_0-aucpr:0.56598	validation_1-aucpr:0.55836
+[2026-06-02T19:10:57.292+0000] {logging_mixin.py:188} INFO - [507]	validation_0-aucpr:0.56845	validation_1-aucpr:0.55800
+[2026-06-02T19:10:57.310+0000] {ml_pipeline.py:1523} INFO - [ML] Training done. Best iteration: 387
+[2026-06-02T19:10:57.332+0000] {ml_pipeline.py:1547} INFO - [ML][FI/WEIGHT] Top-30 features:
+                   feature  score
+       h3_train_percentile  786.0
+      h3_train_active_rate  282.0
+                   doy_cos  114.0
+        city_property_lag1  113.0
+          h3_vs_comm_prior  102.0
+ crime_vs_density_expected   95.0
+                 dayofyear   89.0
+               is_property   87.0
+                   doy_sin   83.0
+           city_total_lag1   83.0
+                crime_z_90   80.0
+                    ewm_60   80.0
+     violent_roll_ratio_30   78.0
+           comm_burst_7_30   74.0
+                    ewm_90   72.0
+  city_violent_roll_mean_7   70.0
+          comm_active_rate   64.0
+ city_property_roll_mean_7   62.0
+       same_dow_vs_overall   61.0
+local_sudden_activation_3d   60.0
+   city_total_roll_mean_30   60.0
+        crime_acceleration   60.0
+    property_roll_ratio_30   58.0
+            same_dow_roll8   57.0
+               burst_14_60   57.0
+      active_rate_vs_train   57.0
+               zero_streak   56.0
+     active_recent_vs_long   56.0
+           days_to_holiday   54.0
+                   dow_sin   52.0
+[2026-06-02T19:10:57.335+0000] {ml_pipeline.py:1547} INFO - [ML][FI/GAIN] Top-30 features:
+                   feature       score
+                    ewm_90 2558.263916
+       h3_train_percentile 1779.944824
+      h3_train_active_rate 1468.011841
+              roll_mean_90 1226.104126
+            active_rate_60  336.287140
+                    ewm_60  279.644531
+               roll_sum_21  257.339142
+              roll_mean_60  231.531509
+              roll_mean_45  146.287048
+               roll_sum_45  117.966599
+               crime_today  110.229935
+                    ewm_30   99.794327
+              total_crimes   89.440651
+              roll_mean_30   66.006630
+                   doy_cos   59.954403
+local_sudden_activation_3d   54.010742
+               is_property   53.837879
+               roll_sum_30   52.235313
+     nbr_r1_new_activation   50.804371
+  city_active_roll_mean_30   49.119907
+              roll_mean_21   48.507210
+            same_dow_roll8   47.986244
+            active_rate_30   46.349808
+          city_active_lag1   45.903908
+            holiday_window   45.296864
+                crime_z_90   44.815575
+      narcotics_roll_sum_7   43.580322
+                roll_sum_7   43.579746
+                crime_z_30   43.216240
+   city_total_roll_mean_30   42.337551
+[2026-06-02T19:10:57.338+0000] {ml_pipeline.py:1547} INFO - [ML][FI/COVER] Top-30 features:
+                   feature        score
+               crime_today 44848.195312
+                roll_sum_7 39522.132812
+         deterrence_signal 38940.925781
+                   dow_sin 37926.851562
+                     lag_1 37633.808594
+          theft_roll_sum_7 33839.343750
+               zero_streak 33255.167969
+              total_crimes 32559.976562
+local_sudden_activation_3d 32027.320312
+           days_to_holiday 30734.175781
+               roll_max_14 29914.810547
+   narcotics_roll_ratio_30 29782.408203
+       precipitation_diff1 29692.021484
+   narcotics_roll_ratio_14 28903.837891
+        precipitation_lag1 28602.414062
+    narcotics_roll_ratio_7 27114.224609
+       h3_train_percentile 24965.587891
+      high_prior_x_holiday 24560.791016
+            holiday_window 24529.296875
+            active_rate_60 23787.583984
+                roll_max_7 22886.628906
+                shock_3_60 22719.443359
+        violent_roll_sum_7 22678.271484
+              h3_above_nbr 22307.802734
+            active_rate_30 22250.498047
+               roll_sum_30 21761.646484
+                     lag_3 21514.916016
+       theft_roll_ratio_14 21489.857422
+               theft_lag_2 21353.599609
+                    ewm_90 21314.097656
+[2026-06-02T19:10:57.347+0000] {ml_pipeline.py:1592} INFO - [ML][FI/GROUP] Feature group contribution (by GAIN):
+            group       score  pct
+ temporal_rolling 7112.946667 74.6
+    spatial_prior 1779.944824 18.7
+            other  395.551022  4.1
+         calendar  107.940647  1.1
+spatial_spillover   50.804371  0.5
+   community_city   45.903908  0.5
+          weather   45.296864  0.5
+[2026-06-02T19:10:57.349+0000] {ml_pipeline.py:1601} WARNING - [ML][FI] ⚠️  Nhóm 'temporal_rolling' chiếm 74.6% tổng GAIN — nguy cơ model phụ thuộc quá nhiều vào 1 loại feature. Xem xét tăng reg_alpha/reg_lambda hoặc giảm colsample_bytree.
+[2026-06-02T19:10:58.946+0000] {ml_pipeline.py:1620} INFO - [ML] Calibrated diagnostic threshold guarded: 0.63 | F1_CALIB=0.5513 | calib_base=0.1805
+[2026-06-02T19:10:59.129+0000] {ml_pipeline.py:1629} INFO - [ML] VAL  – AUC=0.8472 AP=0.5769 F1=0.5581 Top05_R=0.2063 Top05_L=4.09x Top15_R=0.4704 Top30_R=0.7101
+[2026-06-02T19:10:59.130+0000] {ml_pipeline.py:1633} INFO - [ML] TEST – AUC=0.8251 AP=0.5110 F1=0.5257 Top05_R=0.1543 Top05_L=3.06x Top15_R=0.3895 Top30_R=0.5982
+[2026-06-02T19:10:59.152+0000] {ml_pipeline.py:1662} INFO - [ML] Feature day: 2026-05-18  →  Prediction day: 2026-05-19  (852 H3 cells)
+[2026-06-02T19:11:00.096+0000] {ml_pipeline.py:1710} INFO - [ML] Predictions – cells=852 | diagnostic pred_hotspot=197 (23.1%)
+[2026-06-02T19:11:00.097+0000] {ml_pipeline.py:1712} INFO - [ML] Rank-bounded risk distribution:
+risk_level
+LOW         597
+MEDIUM      128
+HIGH         85
+CRITICAL     42
+[2026-06-02T19:11:00.098+0000] {ml_pipeline.py:1734} INFO - [ML] Writing 852 predictions → sage-mind-489618-n5.cdash_warehouse.prediction_results (mode=WRITE_TRUNCATE)
+[2026-06-02T19:11:06.428+0000] {ml_pipeline.py:1753} INFO - [ML] ✓ Predictions written to BigQuery.
+[2026-06-02T19:11:06.429+0000] {ml_pipeline.py:1259} INFO - ========================================================================
+[2026-06-02T19:11:06.430+0000] {ml_pipeline.py:1260} INFO -   ABLATION STUDY — Feature Group Contribution
+[2026-06-02T19:11:06.431+0000] {ml_pipeline.py:1261} INFO - ========================================================================
+[2026-06-02T19:11:14.243+0000] {ml_pipeline.py:1380} INFO - [ABLATION] 1_temporal_only                     | features=149 | thr=0.52 | Val AUC=0.8484 AP=0.5771 F1=0.5526 | Test AUC=0.8242 AP=0.5084 F1=0.5241
+[2026-06-02T19:11:19.850+0000] {ml_pipeline.py:1380} INFO - [ABLATION] 2_temporal_spatial                  | features=177 | thr=0.46 | Val AUC=0.8490 AP=0.5761 F1=0.5511 | Test AUC=0.8244 AP=0.5073 F1=0.5271
+[2026-06-02T19:11:35.578+0000] {ml_pipeline.py:1380} INFO - [ABLATION] 3_temporal_spatial_context          | features=218 | thr=0.56 | Val AUC=0.8478 AP=0.5762 F1=0.5550 | Test AUC=0.8251 AP=0.5111 F1=0.5265
+[2026-06-02T19:11:52.510+0000] {ml_pipeline.py:1380} INFO - [ABLATION] 4_full                              | features=271 | thr=0.51 | Val AUC=0.8478 AP=0.5785 F1=0.5522 | Test AUC=0.8257 AP=0.5111 F1=0.5227
+[2026-06-02T19:11:52.511+0000] {ml_pipeline.py:1390} INFO - [ABLATION] Summary table:
+[2026-06-02T19:11:52.511+0000] {ml_pipeline.py:1391} INFO - [ABLATION] Scenario                            | Feats | Thr | Val_AUC | Val_AP | Val_F1 | Tst_AUC | Tst_AP
+[2026-06-02T19:11:52.512+0000] {ml_pipeline.py:1395} INFO - [ABLATION] ----------------------------------------------------------------------------------------------------
+[2026-06-02T19:11:52.512+0000] {ml_pipeline.py:1397} INFO - [ABLATION] 1_temporal_only                     |   149 | 0.52 | 0.8484  | 0.5771 | 0.5526 | 0.8242  | 0.5084
+[2026-06-02T19:11:52.513+0000] {ml_pipeline.py:1397} INFO - [ABLATION] 2_temporal_spatial                  |   177 | 0.46 | 0.8490  | 0.5761 | 0.5511 | 0.8244  | 0.5073
+[2026-06-02T19:11:52.513+0000] {ml_pipeline.py:1397} INFO - [ABLATION] 3_temporal_spatial_context          |   218 | 0.56 | 0.8478  | 0.5762 | 0.5550 | 0.8251  | 0.5111
+[2026-06-02T19:11:52.514+0000] {ml_pipeline.py:1397} INFO - [ABLATION] 4_full                              |   271 | 0.51 | 0.8478  | 0.5785 | 0.5522 | 0.8257  | 0.5111
+[2026-06-02T19:11:52.514+0000] {ml_pipeline.py:1404} INFO - ========================================================================
+[2026-06-02T19:11:52.529+0000] {ml_pipeline.py:1864} INFO - [ML] Model artifact saved → /tmp/crime_model_v20.pkl
+[2026-06-02T19:11:52.530+0000] {ml_pipeline.py:1867} INFO - ========================================================================
+[2026-06-02T19:11:52.530+0000] {ml_pipeline.py:1868} INFO -   SUMMARY v20 target-safe
+[2026-06-02T19:11:52.531+0000] {ml_pipeline.py:1869} INFO -   VAL  AUC=0.8472 AP=0.5769 F1=0.5581 Top05_R=0.2063 Top05_L=4.09x Top15_R=0.4704 Top30_R=0.7101
+[2026-06-02T19:11:52.531+0000] {ml_pipeline.py:1871} INFO -   TEST AUC=0.8251 AP=0.5110 F1=0.5257 Top05_R=0.1543 Top05_L=3.06x Top15_R=0.3895 Top30_R=0.5982
+[2026-06-02T19:11:52.532+0000] {ml_pipeline.py:1873} INFO -   Risk counts: {'LOW': 597, 'MEDIUM': 128, 'HIGH': 85, 'CRITICAL': 42}
+[2026-06-02T19:11:52.532+0000] {ml_pipeline.py:1874} INFO - ========================================================================
+[2026-06-02T19:11:52.622+0000] {dag_crime_pipeline.py:312} WARNING - [ML] ⚠️ Model chưa đạt ngưỡng: val_auc=0.8472 val_f1=0.5581
+[2026-06-02T19:11:52.623+0000] {python.py:201} INFO - Done. Returned value was: {'val_auc': 0.8472453971106262, 'val_ap': 0.5768784919274743, 'val_f1': 0.558102766798419, 'test_auc': 0.8251187349917787, 'test_ap': 0.5109959865007764, 'test_f1': 0.5257009345794392, 'val_top05_recall': 0.20625718163703524, 'val_top05_lift': 4.08677020359893, 'test_top05_recall': 0.15431994747278344, 'test_top05_lift': 3.057688261553755, 'threshold_diagnostic': 0.6300000000000001, 'risk_counts': {'LOW': 597, 'MEDIUM': 128, 'HIGH': 85, 'CRITICAL': 42}, 'n_predictions': 852, 'model_version': '2026-06-02.hotspot_v20_target_safe_ranker'}
+[2026-06-02T19:11:52.649+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260602T160023, start_date=20260602T190940, end_date=20260602T191152
+[2026-06-02T19:11:52.898+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-06-02T19:11:52.928+0000] {taskinstance.py:3280} INFO - 2 downstream tasks scheduled from follow-on schedule check

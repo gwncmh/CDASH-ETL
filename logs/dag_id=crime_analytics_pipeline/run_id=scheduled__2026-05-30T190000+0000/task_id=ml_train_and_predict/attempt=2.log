@@ -1,0 +1,52 @@
+[2026-06-07T10:11:44.764+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [queued]>
+[2026-06-07T10:11:44.777+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [queued]>
+[2026-06-07T10:11:44.778+0000] {taskinstance.py:2170} INFO - Starting attempt 2 of 3
+[2026-06-07T10:11:44.794+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-30 19:00:00+00:00
+[2026-06-07T10:11:44.804+0000] {standard_task_runner.py:60} INFO - Started process 1365 to run task
+[2026-06-07T10:11:44.809+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'scheduled__2026-05-30T19:00:00+00:00', '--job-id', '623', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpeb5w7o0m']
+[2026-06-07T10:11:44.814+0000] {standard_task_runner.py:88} INFO - Job 623: Subtask ml_train_and_predict
+[2026-06-07T10:11:44.891+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [running]> on host db8b8170dea9
+[2026-06-07T10:11:45.019+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-30T19:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2026-05-30T19:00:00+00:00'
+[2026-06-07T10:11:47.052+0000] {ml_pipeline.py:2016} INFO - ========================================================================
+[2026-06-07T10:11:47.053+0000] {ml_pipeline.py:2017} INFO -   Chicago Crime Hotspot Forecasting – ml_pipeline v24 GroupBlend confidence
+[2026-06-07T10:11:47.054+0000] {ml_pipeline.py:2018} INFO -   Target: next_hotspot = (next_total >= 2)
+[2026-06-07T10:11:47.055+0000] {ml_pipeline.py:2019} INFO -   Dashboard risk: CRITICAL=top5%%, HIGH+=top15%%, MEDIUM+=top30%%
+[2026-06-07T10:11:47.055+0000] {ml_pipeline.py:2020} INFO -   + Feature importance logging per group  [v20]
+[2026-06-07T10:11:47.056+0000] {ml_pipeline.py:2021} INFO -   + Ablation study 6 scenarios            [v20]
+[2026-06-07T10:11:47.057+0000] {ml_pipeline.py:2022} INFO -   + Leak check assertions                 [v20]
+[2026-06-07T10:11:47.057+0000] {ml_pipeline.py:2023} INFO - ========================================================================
+[2026-06-07T10:11:47.131+0000] {ml_pipeline.py:917} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-06-07T10:11:55.233+0000] {ml_pipeline.py:992} INFO - [ML] Loaded 256869 rows, date range: 2025-04-21 → 2026-05-26
+[2026-06-07T10:11:55.234+0000] {ml_pipeline.py:1006} INFO - [ML] Aggregating daily per H3...
+[2026-06-07T10:11:58.773+0000] {ml_pipeline.py:1080} INFO - [ML] Daily grid: 341,652 rows, 852 H3 cells, 401 dates | RAM-safe downcast done
+[2026-06-07T10:11:58.841+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/dag_crime_pipeline.py", line 290, in _run_ml_pipeline
+    result = train_and_predict(
+             ^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 2029, in train_and_predict
+    nbr_r1, nbr_r2, has_h3 = build_neighbor_maps(all_h3)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1095, in build_neighbor_maps
+    disk1 = set(h3_grid_disk_compat(h3lib, cell, 1))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 512, in h3_grid_disk_compat
+    return h3lib.k_ring(cell, k)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/h3/api/_api_template.py", line 311, in k_ring
+    mv = _cy.disk(self._in_scalar(h), k)
+                  ^^^^^^^^^^^^^^^^^^
+TypeError: Argument 'h' has incorrect type (expected str, got numpy.str_)
+[2026-06-07T10:11:58.879+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260530T190000, start_date=20260607T101144, end_date=20260607T101158
+[2026-06-07T10:11:58.900+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 623 for task ml_train_and_predict (Argument 'h' has incorrect type (expected str, got numpy.str_); 1365)
+[2026-06-07T10:11:58.989+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-06-07T10:11:59.022+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

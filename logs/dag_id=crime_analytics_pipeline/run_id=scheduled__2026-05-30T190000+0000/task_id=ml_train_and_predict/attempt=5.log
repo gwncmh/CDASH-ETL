@@ -1,0 +1,79 @@
+[2026-06-07T10:22:43.052+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [queued]>
+[2026-06-07T10:22:43.063+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [queued]>
+[2026-06-07T10:22:43.064+0000] {taskinstance.py:2170} INFO - Starting attempt 5 of 6
+[2026-06-07T10:22:43.079+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): ml_train_and_predict> on 2026-05-30 19:00:00+00:00
+[2026-06-07T10:22:43.089+0000] {standard_task_runner.py:60} INFO - Started process 1614 to run task
+[2026-06-07T10:22:43.093+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'ml_train_and_predict', 'scheduled__2026-05-30T19:00:00+00:00', '--job-id', '626', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmp4lh7fmhw']
+[2026-06-07T10:22:43.098+0000] {standard_task_runner.py:88} INFO - Job 626: Subtask ml_train_and_predict
+[2026-06-07T10:22:43.180+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.ml_train_and_predict scheduled__2026-05-30T19:00:00+00:00 [running]> on host db8b8170dea9
+[2026-06-07T10:22:43.312+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='ml_train_and_predict' AIRFLOW_CTX_EXECUTION_DATE='2026-05-30T19:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='5' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2026-05-30T19:00:00+00:00'
+[2026-06-07T10:22:44.242+0000] {ml_pipeline.py:2017} INFO - ========================================================================
+[2026-06-07T10:22:44.243+0000] {ml_pipeline.py:2018} INFO -   Chicago Crime Hotspot Forecasting – ml_pipeline v24 GroupBlend confidence
+[2026-06-07T10:22:44.243+0000] {ml_pipeline.py:2019} INFO -   Target: next_hotspot = (next_total >= 2)
+[2026-06-07T10:22:44.244+0000] {ml_pipeline.py:2020} INFO -   Dashboard risk: CRITICAL=top5%%, HIGH+=top15%%, MEDIUM+=top30%%
+[2026-06-07T10:22:44.244+0000] {ml_pipeline.py:2021} INFO -   + Feature importance logging per group  [v20]
+[2026-06-07T10:22:44.245+0000] {ml_pipeline.py:2022} INFO -   + Ablation study 6 scenarios            [v20]
+[2026-06-07T10:22:44.245+0000] {ml_pipeline.py:2023} INFO -   + Leak check assertions                 [v20]
+[2026-06-07T10:22:44.246+0000] {ml_pipeline.py:2024} INFO - ========================================================================
+[2026-06-07T10:22:44.298+0000] {ml_pipeline.py:918} INFO - [ML] Loading enriched_crime_data from BigQuery (last 400 days)...
+[2026-06-07T10:22:51.114+0000] {ml_pipeline.py:993} INFO - [ML] Loaded 256869 rows, date range: 2025-04-21 → 2026-05-26
+[2026-06-07T10:22:51.115+0000] {ml_pipeline.py:1007} INFO - [ML] Aggregating daily per H3...
+[2026-06-07T10:22:54.792+0000] {ml_pipeline.py:1081} INFO - [ML] Daily grid: 341,652 rows, 852 H3 cells, 401 dates | RAM-safe downcast done
+[2026-06-07T10:22:54.846+0000] {ml_pipeline.py:1101} INFO - [ML] H3 neighbors built. Avg ring-1 in dataset: 5.4
+[2026-06-07T10:22:54.929+0000] {ml_pipeline.py:2053} INFO - [ML] Split Train: 2025-09-20→2026-04-27 (220 d) Calib: 2026-04-28→2026-05-11 Val: 2026-05-12→2026-05-18 Test: 2026-05-19→2026-05-25
+[2026-06-07T10:22:54.930+0000] {ml_pipeline.py:2062} INFO - [LEAK_CHECK] train_dates: 2025-09-20 → 2026-04-27 (220 days)
+[2026-06-07T10:22:54.931+0000] {ml_pipeline.py:2064} INFO - [LEAK_CHECK] val_dates:   2026-05-12 → 2026-05-18 | test_dates: 2026-05-19 → 2026-05-25
+[2026-06-07T10:22:55.014+0000] {ml_pipeline.py:1125} INFO - [ML]   [4A] Own-cell lag/rolling features
+[2026-06-07T10:23:00.062+0000] {ml_pipeline.py:1168} INFO - [ML]   [4B] Burst/streak features
+[2026-06-07T10:23:00.302+0000] {ml_pipeline.py:1214} INFO - [ML]   [4C] Crime-type composition
+[2026-06-07T10:23:02.196+0000] {ml_pipeline.py:1231} INFO - [ML]   [4D] Weather/context features
+[2026-06-07T10:23:02.697+0000] {ml_pipeline.py:1247} INFO - [ML]   [4E] Community-level features
+[2026-06-07T10:23:03.655+0000] {ml_pipeline.py:1295} INFO - [ML]   [4F] City-level features
+[2026-06-07T10:23:04.270+0000] {ml_pipeline.py:1329} INFO - [ML]   [4G] H3 spatial spillover
+[2026-06-07T10:23:04.721+0000] {ml_pipeline.py:1401} INFO - [ML]     computing nbr_r1 mean/sum/max/std/active-count + r2 + roll7 ...
+[2026-06-07T10:23:07.174+0000] {ml_pipeline.py:1472} INFO - [ML]     ✓ Spatial spillover features added
+[2026-06-07T10:23:07.175+0000] {ml_pipeline.py:1487} INFO - [ML]   [4H] Train-only spatial priors
+[2026-06-07T10:23:08.316+0000] {ml_pipeline.py:1530} INFO - [ML]   [4I] Near-repeat victimization
+[2026-06-07T10:23:08.344+0000] {ml_pipeline.py:1543} INFO - [ML]   [4J] Cross-crime lead-lag
+[2026-06-07T10:23:08.353+0000] {ml_pipeline.py:1552} INFO - [ML]   [4K] Arrest deterrence
+[2026-06-07T10:23:08.599+0000] {ml_pipeline.py:1566} INFO - [ML]   [4L] Density-normalized crime
+[2026-06-07T10:23:08.611+0000] {ml_pipeline.py:1577} INFO - [ML]   [4M] Holiday/event features
+[2026-06-07T10:23:12.388+0000] {ml_pipeline.py:1586} INFO - [ML]   [4N] Momentum and trend direction
+[2026-06-07T10:23:13.883+0000] {ml_pipeline.py:1600} INFO - [ML]   [4O] Hardship interaction
+[2026-06-07T10:23:13.893+0000] {ml_pipeline.py:1612} INFO - [ML]   [4P] Prior-relative features
+[2026-06-07T10:23:13.905+0000] {ml_pipeline.py:1628} INFO - [ML] Feature engineering done. Shape: (341652, 296)
+[2026-06-07T10:23:13.918+0000] {ml_pipeline.py:2074} INFO - [LEAK_CHECK] h3_train_percentile mean — train=0.5006 val=0.5006 test=0.5006
+[2026-06-07T10:23:13.948+0000] {ml_pipeline.py:2096} INFO - [ML] train next_has_crime=39.72% | next_hotspot>=2=17.21%
+[2026-06-07T10:23:13.953+0000] {ml_pipeline.py:2096} INFO - [ML] calib next_has_crime=41.18% | next_hotspot>=2=18.35%
+[2026-06-07T10:23:13.958+0000] {ml_pipeline.py:2096} INFO - [ML] val next_has_crime=34.88% | next_hotspot>=2=19.06%
+[2026-06-07T10:23:13.962+0000] {ml_pipeline.py:2096} INFO - [ML] test next_has_crime=41.28% | next_hotspot>=2=18.71%
+[2026-06-07T10:23:13.967+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1653, in train_model
+    import lightgbm as lgb
+ModuleNotFoundError: No module named 'lightgbm'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/dags/dag_crime_pipeline.py", line 290, in _run_ml_pipeline
+    result = train_and_predict(
+             ^^^^^^^^^^^^^^^^^^
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 2102, in train_and_predict
+    train_model(df_feat, train_dates, calib_dates, val_dates, test_dates)
+  File "/opt/airflow/scripts/ml/ml_pipeline.py", line 1655, in train_model
+    raise RuntimeError("LightGBM is required for v24 GroupBlend.") from e
+RuntimeError: LightGBM is required for v24 GroupBlend.
+[2026-06-07T10:23:14.002+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=ml_train_and_predict, execution_date=20260530T190000, start_date=20260607T102243, end_date=20260607T102314
+[2026-06-07T10:23:14.038+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 626 for task ml_train_and_predict (LightGBM is required for v24 GroupBlend.; 1614)
+[2026-06-07T10:23:14.232+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-06-07T10:23:14.263+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check
