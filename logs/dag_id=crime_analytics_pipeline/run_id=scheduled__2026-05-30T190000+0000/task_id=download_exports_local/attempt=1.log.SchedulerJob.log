@@ -1,0 +1,1 @@
+[2026-06-07T18:04:03.035+0000] {task_context_logger.py:104} ERROR - Executor reports task instance <TaskInstance: crime_analytics_pipeline.download_exports_local scheduled__2026-05-30T19:00:00+00:00 [queued]> finished (success) although the task says it's queued. (Info: None) Was the task killed externally?

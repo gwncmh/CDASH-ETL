@@ -29,6 +29,7 @@ import gc
 import numpy as np
 import pandas as pd
 from google.cloud import bigquery
+from config import CHICAGO_COMMUNITY_AREA_NAMES
 
 warnings.filterwarnings("ignore")
 log = logging.getLogger("ML_Pipeline_v24_groupblend_confidence")
@@ -163,6 +164,7 @@ BQ_PREDICTION_SCHEMA = [
     bigquery.SchemaField("test_top30_recall", "FLOAT"),
     bigquery.SchemaField("test_top30_lift",   "FLOAT"),
     bigquery.SchemaField("community_area",       "FLOAT"),
+    bigquery.SchemaField("community_area_name", "STRING"),
     bigquery.SchemaField("hardship_index",        "FLOAT"),
     bigquery.SchemaField("unemployment_rate",     "FLOAT"),
     bigquery.SchemaField("population_density",    "FLOAT"),
@@ -1984,7 +1986,7 @@ def train_type_models(
     from sklearn.metrics import roc_auc_score, average_precision_score
 
     context_cols = [c for c in feature_cols
-                    if feature_blend_bucket(c) == "context"]
+                    if feature_blend_bucket(c) in ("context", "temporal") ]
 
     supervised = df["next_total"].notna()
     train_mask = df["date"].isin(train_dates) & supervised
@@ -2119,7 +2121,6 @@ def build_predictions(
     latest_day = df["date"].max()
     next_day   = latest_day + pd.Timedelta(days=1)
     df_latest  = df[df["date"].eq(latest_day)].copy().sort_values("h3_index")
-
     log.info("[ML] Feature day: %s → Prediction day: %s (%d H3 cells)",
              latest_day.date(), next_day.date(), len(df_latest))
 
@@ -2153,17 +2154,16 @@ def build_predictions(
             pp["model"].predict_proba(X_type)[:, 1].astype(float)
             if pp else np.nan
         )
-
         def _dominant(row):
-            # Chỉ assign type nếu hotspot score đủ cao
-            if row["hotspot_score"] < 0.25:
-                return "LOW"
-            viol = row.get("violent_probability",  0) or 0
+            if row["pred_hotspot"] == 0:
+                return "UNKNOWN"
+            
+            viol = row.get("violent_probability", 0) or 0
             prop = row.get("property_probability", 0) or 0
-            # Cần margin 20% để tránh gọi MIXED khi hai cái gần bằng nhau
-            if viol > 0.35 and viol > prop:
+            
+            if viol > prop + 0.05:
                 return "VIOLENT"
-            if prop > 0.35 and prop > viol:
+            if prop > viol + 0.05:
                 return "PROPERTY"
             return "MIXED"
 
@@ -2191,7 +2191,7 @@ def build_predictions(
         out[k] = round(float(v), 4) if pd.notna(v) else np.nan
 
     ctx_cols = [
-        "community_area", "hardship_index", "unemployment_rate", "population_density",
+        "community_area", "community_area_name", "hardship_index", "unemployment_rate", "population_density",
         "h3_train_percentile", "h3_train_active_rate", "roll_mean_7", "roll_mean_30", "zero_streak",
         "nbr_r1_mean", "nbr_r1_active_rate", "nbr_r1_active_count", "near_repeat_3d",
         "arrest_rate_7", "is_holiday",
@@ -2200,7 +2200,9 @@ def build_predictions(
     for c in ctx_cols:
         if c in latest_reset.columns:
             out[c] = latest_reset[c].values
-
+    out["community_area_name"] = out["community_area"].map(
+        CHICAGO_COMMUNITY_AREA_NAMES
+    ).fillna("Unknown")
     core  = [
         "prediction_date", "h3_index", "crime_probability", "hotspot_score",
         "risk_level", "confidence_level", "confidence_score", "model_version", "created_at",
@@ -2404,8 +2406,13 @@ def train_and_predict(
         train_model(df_feat, train_dates, calib_dates, val_dates, test_dates)
     )
         # Build type targets
-    df_feat["next_violent"]  = (g_feat["is_violent"].shift(-1)  >= 1).astype(np.int8)
-    df_feat["next_property"] = (g_feat["is_property"].shift(-1) >= 1).astype(np.int8)
+    df_feat["next_violent"] = (
+    g_feat["is_violent"].shift(-1) > g_feat["is_property"].shift(-1)
+    ).astype(np.int8)
+
+    df_feat["next_property"] = (
+        g_feat["is_property"].shift(-1) > g_feat["is_violent"].shift(-1)
+    ).astype(np.int8)
 
     # Train type models
     type_models = train_type_models(

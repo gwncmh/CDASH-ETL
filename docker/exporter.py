@@ -74,37 +74,64 @@ def sql_crimes(days_back: int) -> str:
             case_number,
             CAST(date AS STRING)    AS date,
             primary_type,
+            -- Thêm crime category để Kepler.gl dùng làm color channel
+            CASE
+                WHEN UPPER(primary_type) IN (
+                    'BATTERY','ASSAULT','ROBBERY','HOMICIDE',
+                    'CRIMINAL SEXUAL ASSAULT','SEX OFFENSE',
+                    'KIDNAPPING','INTIMIDATION')
+                THEN 'VIOLENT'
+                WHEN UPPER(primary_type) IN (
+                    'THEFT','BURGLARY','MOTOR VEHICLE THEFT',
+                    'CRIMINAL DAMAGE','DECEPTIVE PRACTICE','ARSON')
+                THEN 'PROPERTY'
+                ELSE 'OTHER'
+            END                     AS crime_category,
             community_area,
+            community_area_name,
             h3_index,
             hour_of_day,
             day_of_week,
             month,
             latitude,
             longitude,
-            temp_max,
-            precipitation,
-            crime_density_7d,
-            crime_density_30d,
+            -- Bỏ các cột ML features không cần cho visualization
+            -- Giữ lại đủ để filter trên dashboard
             hardship_index,
             unemployment_rate
         FROM `{PROJECT_ID}.{BQ_DATASET}.enriched_crime_data`
         WHERE date >= '{since}'
-        LIMIT 200000
+          AND latitude  IS NOT NULL
+          AND longitude IS NOT NULL
+        -- Sample thay vì LIMIT cứng — đảm bảo phân bố đều theo thời gian
+        -- thay vì chỉ lấy records đầu tiên
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY DATE_TRUNC(date, WEEK)
+            ORDER BY RAND()
+        ) <= 3000
     """
 
 
 def sql_forecast() -> str:
-    # Lấy prediction date mới nhất trong bảng
     return f"""
         SELECT
             CAST(pr.prediction_date AS STRING) AS prediction_date,
             pr.h3_index,
+            pr.community_area_name,
             pr.crime_probability,
             pr.risk_level,
-            pr.violent_probability,    -- thêm
-            pr.property_probability,   -- thêm
-            pr.dominant_type,          -- thêm
-            pr.confidence_level,       -- thêm nếu muốn
+            pr.dominant_type,
+            pr.violent_probability,
+            pr.property_probability,
+            pr.confidence_level,
+            pr.confidence_score,
+            -- Context để tooltip hiển thị
+            pr.hardship_index,
+            pr.unemployment_rate,
+            pr.population_density,
+            pr.near_repeat_3d,
+            pr.zero_streak,
+            pr.roll_mean_7,
             pr.model_version,
             AVG(e.latitude)  AS latitude,
             AVG(e.longitude) AS longitude
@@ -115,7 +142,7 @@ def sql_forecast() -> str:
             SELECT MAX(prediction_date)
             FROM `{PROJECT_ID}.{BQ_DATASET}.prediction_results`
         )
-        GROUP BY 1, 2, 3, 4, 5
+        GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
         ORDER BY pr.crime_probability DESC
     """
 

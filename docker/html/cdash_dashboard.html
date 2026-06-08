@@ -68,19 +68,53 @@
   </div>
 
   <!-- ══ PAGE: MAP (UC2) ══ -->
-  <div class="page fullpage" id="page-map">
-    <!--
-      Thay src bên dưới bằng đường dẫn file kepler_export.html
-      sau khi bạn export từ Kepler.gl và host lên GitHub Pages hoặc GCS.
-      Ví dụ: src="./kepler_export.html"
-               hoặc src="https://YOUR_USERNAME.github.io/cdash/kepler_export.html"
-    -->
-    <iframe
-      class="fullpage-iframe"
-      src="./kepler_export.html"
-      allowfullscreen>
-    </iframe>
+<!-- ══ PAGE: MAP (UC2) ══ -->
+<div class="page fullpage" id="page-map" style="position:relative;">
+
+  <!-- Thanh toolbar trên cùng -->
+  <div style="
+    position:absolute; top:0; left:0; right:0; z-index:10;
+    background:#111827; border-bottom:1px solid #2d3748;
+    padding:10px 16px; display:flex; align-items:center; gap:12px;">
+
+    <span style="color:#9ca3af; font-family:'DM Sans',sans-serif; font-size:13px;">
+      Kepler.gl – Crime Hotspot Explorer
+    </span>
+
+    <div style="margin-left:auto; display:flex; gap:8px;">
+      <a id="btn-download-crimes" href="/exports/crimes.geojson" download="crimes.geojson"
+        style="padding:5px 14px; background:#1e3a5f; color:#60a5fa;
+               border:1px solid #2563eb; border-radius:4px;
+               font-family:'DM Sans',sans-serif; font-size:12px;
+               text-decoration:none; cursor:pointer;">
+        ⬇ crimes.geojson
+      </a>
+      <a id="btn-download-forecast" href="/exports/forecast.geojson" download="forecast.geojson"
+        style="padding:5px 14px; background:#3b1f0a; color:#fb923c;
+               border:1px solid #ea580c; border-radius:4px;
+               font-family:'DM Sans',sans-serif; font-size:12px;
+               text-decoration:none; cursor:pointer;">
+        ⬇ forecast.geojson
+      </a>
+      <a href="https://kepler.gl/demo" target="_blank"
+        style="padding:5px 14px; background:transparent; color:#9ca3af;
+               border:1px solid #374151; border-radius:4px;
+               font-family:'DM Sans',sans-serif; font-size:12px;
+               text-decoration:none; cursor:pointer;">
+        ↗ Mở Kepler.gl
+      </a>
+    </div>
   </div>
+
+  <!-- Iframe Kepler demo, đẩy xuống dưới toolbar -->
+  <iframe
+    src="https://kepler.gl/demo"
+    style="position:absolute; top:41px; left:0; right:0; bottom:0;
+           width:100%; height:calc(100% - 41px); border:none;"
+    allowfullscreen>
+  </iframe>
+
+</div>
 
   <!-- ══ PAGE: HOTSPOT (UC3) ══ -->
   <div class="page fullpage" id="page-hotspot">
@@ -90,7 +124,7 @@
     -->
     <iframe
       class="fullpage-iframe"
-      src="https://datastudio.google.com/embed/reporting/227d0c5e-e760-46cb-ba6d-b6acfee4f5dc/page/YodzF"
+      src="https://datastudio.google.com/embed/reporting/e5636583-ae2c-45da-986f-6b9d3c348862/page/YodzF"
       allowfullscreen
       sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox">
     </iframe>
