@@ -240,7 +240,6 @@ def main():
                 c.join_date                                          AS date,
                 c.primary_type,
                 c.community_area,
-                s.community_area_name,
                 c.h3_index,
                 c.latitude,
                 c.longitude,

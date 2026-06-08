@@ -14,6 +14,33 @@ import shutil
 from google.cloud import storage
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
+from pyspark.sql.types import (
+    StructType, StructField, StringType, BooleanType,
+    IntegerType, DoubleType, TimestampType
+)
+
+# Schema đọc Bronze — date luôn là StringType để tránh conflict
+BRONZE_READ_SCHEMA = StructType([
+    StructField("unique_key",           IntegerType(), True),
+    StructField("case_number",          StringType(),  True),
+    StructField("date",                 StringType(),  True),  # ← BẮT BUỘC string
+    StructField("block",                StringType(),  True),
+    StructField("iucr",                 StringType(),  True),
+    StructField("primary_type",         StringType(),  True),
+    StructField("description",          StringType(),  True),
+    StructField("location_description", StringType(),  True),
+    StructField("arrest",               BooleanType(), True),
+    StructField("domestic",             BooleanType(), True),
+    StructField("beat",                 IntegerType(), True),
+    StructField("district",             IntegerType(), True),
+    StructField("ward",                 IntegerType(), True),
+    StructField("community_area",       IntegerType(), True),
+    StructField("fbi_code",             StringType(),  True),
+    StructField("latitude",             DoubleType(),  True),
+    StructField("longitude",            DoubleType(),  True),
+    StructField("year",                 IntegerType(), True),
+    StructField("ingested_at",          StringType(),  True),
+])
 
 # ── sys.path bootstrap (giữ nguyên để import package zip) ─────────────────
 current_dir  = os.path.dirname(os.path.abspath(__file__))
@@ -82,6 +109,7 @@ def main():
         .appName("ChicagoCrime_Stage3_Silver")
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+        .config("spark.sql.parquet.enableVectorizedReader", "false")  # ← THÊM DÒNG NÀY
         .getOrCreate()
     )
 
@@ -123,7 +151,10 @@ def main():
             
             logger.info("INCREMENTAL mode: đọc %d partitions từ %s → %s",
                         len(valid_paths), start_date.date(), end_date.date())
-            df_bronze = spark.read.parquet(*valid_paths)
+            df_bronze = spark.read \
+                .schema(BRONZE_READ_SCHEMA) \
+                .option("spark.sql.parquet.enableVectorizedReader", "false") \
+                .parquet(*valid_paths)
         else:
             logger.info(f"FULL LOAD mode: đọc toàn bộ {bronze_path}")
             df_bronze = spark.read.parquet(bronze_path)

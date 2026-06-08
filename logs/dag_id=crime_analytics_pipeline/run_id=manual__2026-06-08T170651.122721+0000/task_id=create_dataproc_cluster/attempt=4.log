@@ -1,0 +1,85 @@
+[2026-06-08T17:20:56.093+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-06-08T17:06:51.122721+00:00 [queued]>
+[2026-06-08T17:20:56.104+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-06-08T17:06:51.122721+00:00 [queued]>
+[2026-06-08T17:20:56.105+0000] {taskinstance.py:2170} INFO - Starting attempt 4 of 5
+[2026-06-08T17:20:56.121+0000] {taskinstance.py:2191} INFO - Executing <Task(DataprocCreateClusterOperator): create_dataproc_cluster> on 2026-06-08 17:06:51.122721+00:00
+[2026-06-08T17:20:56.135+0000] {standard_task_runner.py:60} INFO - Started process 653 to run task
+[2026-06-08T17:20:56.139+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'create_dataproc_cluster', 'manual__2026-06-08T17:06:51.122721+00:00', '--job-id', '735', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpa_hjk0ro']
+[2026-06-08T17:20:56.143+0000] {standard_task_runner.py:88} INFO - Job 735: Subtask create_dataproc_cluster
+[2026-06-08T17:20:56.225+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-06-08T17:06:51.122721+00:00 [running]> on host d26a8a58ef02
+[2026-06-08T17:20:56.347+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='create_dataproc_cluster' AIRFLOW_CTX_EXECUTION_DATE='2026-06-08T17:06:51.122721+00:00' AIRFLOW_CTX_TRY_NUMBER='4' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-08T17:06:51.122721+00:00'
+[2026-06-08T17:20:56.350+0000] {dataproc.py:722} INFO - Creating cluster: crime-etl-cluster
+[2026-06-08T17:20:56.365+0000] {connection.py:234} WARNING - Connection schemes (type: google_cloud_platform) shall not contain '_' according to RFC3986.
+[2026-06-08T17:20:56.367+0000] {base.py:83} INFO - Using connection ID 'google_cloud_default' for task execution.
+[2026-06-08T17:23:00.802+0000] {dataproc.py:682} INFO - Cluster is in ERROR state
+[2026-06-08T17:23:00.804+0000] {dataproc.py:683} INFO - Gathering diagnostic information.
+[2026-06-08T17:23:02.219+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 79, in error_remapped_callable
+    return callable_(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/grpc/_channel.py", line 1160, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/grpc/_channel.py", line 1003, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.FAILED_PRECONDITION
+	details = "Detected missing master VMs!
+Details: [Missing GCE VM crime-etl-cluster-m.]"
+	debug_error_string = "UNKNOWN:Error received from peer ipv4:142.250.199.74:443 {grpc_message:"Detected missing master VMs!\nDetails: [Missing GCE VM crime-etl-cluster-m.]", grpc_status:9, created_time:"2026-06-08T17:23:02.182414741+00:00"}"
+>
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 769, in execute
+    self._handle_error_state(hook, cluster)
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 684, in _handle_error_state
+    gcs_uri = hook.diagnose_cluster(
+              ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 477, in inner_wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 408, in diagnose_cluster
+    operation = client.diagnose_cluster(
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/cloud/dataproc_v1/services/cluster_controller/client.py", line 1668, in diagnose_cluster
+    response = rpc(
+               ^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/gapic_v1/method.py", line 131, in __call__
+    return wrapped_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/retry.py", line 372, in retry_wrapped_func
+    return retry_target(
+           ^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/retry.py", line 207, in retry_target
+    result = target()
+             ^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 81, in error_remapped_callable
+    raise exceptions.from_grpc_error(exc) from exc
+google.api_core.exceptions.FailedPrecondition: 400 Detected missing master VMs!
+Details: [Missing GCE VM crime-etl-cluster-m.]
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 775, in execute
+    raise ae
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 738, in execute
+    cluster = hook.wait_for_operation(
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 267, in wait_for_operation
+    raise AirflowException(error)
+airflow.exceptions.AirflowException: 503 Error Code: UNAVAILABLE, errorSource: COMPUTE_ENGINE, Error Message: The zone 'projects/sage-mind-489618-n5/zones/us-central1-c' does not have enough resources available to fulfill the request.  Try a different zone, or try again later.
+ 14: Error Code: UNAVAILABLE, errorSource: COMPUTE_ENGINE, Error Message: The zone 'projects/sage-mind-489618-n5/zones/us-central1-c' does not have enough resources available to fulfill the request.  Try a different zone, or try again later.
+
+[2026-06-08T17:23:02.265+0000] {taskinstance.py:1138} INFO - Marking task as UP_FOR_RETRY. dag_id=crime_analytics_pipeline, task_id=create_dataproc_cluster, execution_date=20260608T170651, start_date=20260608T172056, end_date=20260608T172302
+[2026-06-08T17:23:02.290+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 735 for task create_dataproc_cluster (503 Error Code: UNAVAILABLE, errorSource: COMPUTE_ENGINE, Error Message: The zone 'projects/sage-mind-489618-n5/zones/us-central1-c' does not have enough resources available to fulfill the request.  Try a different zone, or try again later.
+ 14: Error Code: UNAVAILABLE, errorSource: COMPUTE_ENGINE, Error Message: The zone 'projects/sage-mind-489618-n5/zones/us-central1-c' does not have enough resources available to fulfill the request.  Try a different zone, or try again later.
+; 653)
+[2026-06-08T17:23:02.328+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-06-08T17:23:02.362+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

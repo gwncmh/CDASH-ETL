@@ -62,6 +62,7 @@ CLUSTER_CONFIG = {
         "service_account_scopes": [
             "https://www.googleapis.com/auth/cloud-platform"
         ],
+        "zone_uri": "us-central1-a",
     },
     "initialization_actions": [
         {
@@ -137,8 +138,25 @@ def _ingest_weather(ds: str, **kwargs):
         start_date = date(2001, 1, 1)
         end_date   = date.today() - timedelta(days=2)
     else:
-        target     = datetime.strptime(ds, "%Y-%m-%d").date() - timedelta(days=2)
-        start_date = end_date = target
+        # FIX: load cả tuần thay vì 1 ngày
+        end_date   = datetime.strptime(ds, "%Y-%m-%d").date() - timedelta(days=2)
+        start_date = end_date - timedelta(days=7)   # ← buffer 7 ngày
+
+    # FIX: kiểm tra ngày đã có trong BQ để tránh duplicate
+    client = bigquery.Client(project=GCP_PROJECT_ID)
+    table_id = f"{GCP_PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE_WEATHER}"
+    
+    try:
+        existing_query = f"""
+            SELECT CAST(weather_date AS STRING) as d
+            FROM `{table_id}`
+            WHERE weather_date BETWEEN '{start_date.isoformat()}' AND '{end_date.isoformat()}'
+        """
+        existing_dates = {
+            row.d for row in client.query(existing_query).result()
+        }
+    except Exception:
+        existing_dates = set()   # bảng chưa tồn tại
 
     def date_chunks(start, end):
         cur = start
@@ -150,36 +168,64 @@ def _ingest_weather(ds: str, **kwargs):
     for chunk_start, chunk_end in date_chunks(start_date, end_date):
         headers = {"token": NOAA_API_TOKEN}
         params  = {
-            "datasetid": "GHCND", "stationid": NOAA_STATION_ID,
-            "startdate": chunk_start.isoformat(), "enddate": chunk_end.isoformat(),
-            "datatypeid": "TMAX,TMIN,PRCP,AWND,SNWD", "limit": 1000, "units": "standard",
+            "datasetid":  "GHCND",
+            "stationid":  NOAA_STATION_ID,
+            "startdate":  chunk_start.isoformat(),
+            "enddate":    chunk_end.isoformat(),
+            "datatypeid": "TMAX,TMIN,PRCP,AWND,SNWD",
+            "limit":      1000,
+            "units":      "standard",
         }
-        resp    = requests.get("https://www.ncdc.noaa.gov/cdo-web/api/v2/data",
-                               headers=headers, params=params, timeout=30)
+        resp = requests.get(
+            "https://www.ncdc.noaa.gov/cdo-web/api/v2/data",
+            headers=headers, params=params, timeout=30
+        )
         resp.raise_for_status()
         results = resp.json().get("results", [])
         if not results:
             continue
+
         df = pd.DataFrame(results)
         df["date"] = pd.to_datetime(df["date"]).dt.date
+
         df_pivot = (
-            df.pivot_table(index="date", columns="datatype", values="value", aggfunc="first")
+            df.pivot_table(
+                index="date", columns="datatype",
+                values="value", aggfunc="first"
+            )
             .reset_index()
-            .rename(columns={"date": "weather_date", "TMAX": "temp_max", "TMIN": "temp_min",
-                             "PRCP": "precipitation", "AWND": "wind_speed", "SNWD": "snow_depth"})
+            .rename(columns={
+                "date": "weather_date",
+                "TMAX": "temp_max", "TMIN": "temp_min",
+                "PRCP": "precipitation", "AWND": "wind_speed", "SNWD": "snow_depth"
+            })
         )
         for c in ["temp_max", "temp_min", "precipitation", "wind_speed", "snow_depth"]:
             if c not in df_pivot.columns:
                 df_pivot[c] = 0.0
-        all_dfs.append(df_pivot[["weather_date","temp_max","temp_min","precipitation","wind_speed","snow_depth"]])
+
+        df_pivot = df_pivot[
+            ["weather_date","temp_max","temp_min","precipitation","wind_speed","snow_depth"]
+        ]
+
+        # FIX: bỏ qua ngày đã có trong BQ
+        df_pivot = df_pivot[
+            ~df_pivot["weather_date"].astype(str).isin(existing_dates)
+        ]
+
+        if not df_pivot.empty:
+            all_dfs.append(df_pivot)
 
     if not all_dfs:
+        import logging
+        logging.getLogger("ingest_weather").info(
+            "Không có dữ liệu weather mới từ %s đến %s", start_date, end_date
+        )
         return
 
     df_final = pd.concat(all_dfs, ignore_index=True)
-    client   = bigquery.Client(project=GCP_PROJECT_ID)
-    table_id = f"{GCP_PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE_WEATHER}"
-    job_cfg  = bigquery.LoadJobConfig(
+    
+    job_cfg = bigquery.LoadJobConfig(
         write_disposition="WRITE_APPEND",
         schema=[
             bigquery.SchemaField("weather_date",  "DATE"),
@@ -191,6 +237,12 @@ def _ingest_weather(ds: str, **kwargs):
         ],
     )
     client.load_table_from_dataframe(df_final, table_id, job_config=job_cfg).result()
+    
+    import logging
+    logging.getLogger("ingest_weather").info(
+        "Đã load %d ngày weather mới (%s → %s)",
+        len(df_final), start_date, end_date
+    )
 
 
 def _ingest_socioeconomic(**kwargs):
