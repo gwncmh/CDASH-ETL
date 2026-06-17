@@ -1,0 +1,16 @@
+[2026-06-11T17:27:36.360+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-06-11T16:20:50.108333+00:00 [queued]>
+[2026-06-11T17:27:36.369+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-06-11T16:20:50.108333+00:00 [queued]>
+[2026-06-11T17:27:36.371+0000] {taskinstance.py:2170} INFO - Starting attempt 3 of 4
+[2026-06-11T17:27:36.387+0000] {taskinstance.py:2191} INFO - Executing <Task(DataprocCreateClusterOperator): create_dataproc_cluster> on 2026-06-11 16:20:50.108333+00:00
+[2026-06-11T17:27:36.401+0000] {standard_task_runner.py:60} INFO - Started process 1397 to run task
+[2026-06-11T17:27:36.407+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'create_dataproc_cluster', 'manual__2026-06-11T16:20:50.108333+00:00', '--job-id', '791', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmpooj7bs7v']
+[2026-06-11T17:27:36.411+0000] {standard_task_runner.py:88} INFO - Job 791: Subtask create_dataproc_cluster
+[2026-06-11T17:27:36.486+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.create_dataproc_cluster manual__2026-06-11T16:20:50.108333+00:00 [running]> on host d26a8a58ef02
+[2026-06-11T17:27:36.603+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='create_dataproc_cluster' AIRFLOW_CTX_EXECUTION_DATE='2026-06-11T16:20:50.108333+00:00' AIRFLOW_CTX_TRY_NUMBER='3' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-11T16:20:50.108333+00:00'
+[2026-06-11T17:27:36.605+0000] {dataproc.py:722} INFO - Creating cluster: crime-etl-cluster
+[2026-06-11T17:27:36.619+0000] {connection.py:234} WARNING - Connection schemes (type: google_cloud_platform) shall not contain '_' according to RFC3986.
+[2026-06-11T17:27:36.622+0000] {base.py:83} INFO - Using connection ID 'google_cloud_default' for task execution.
+[2026-06-11T17:31:37.470+0000] {dataproc.py:741} INFO - Cluster created.
+[2026-06-11T17:31:37.513+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=crime_analytics_pipeline, task_id=create_dataproc_cluster, execution_date=20260611T162050, start_date=20260611T172736, end_date=20260611T173137
+[2026-06-11T17:31:37.564+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-06-11T17:31:37.601+0000] {taskinstance.py:3280} INFO - 1 downstream tasks scheduled from follow-on schedule check

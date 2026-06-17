@@ -10,7 +10,7 @@ logger = get_logger("Stage3_GISEncoder")
 CHICAGO_CENTER_LAT = 41.8832
 CHICAGO_CENTER_LON = -87.6324
 EARTH_RADIUS_KM = 6371.0
-H3_RESOLUTION = 9
+H3_RESOLUTION = 8
 
 # KHAI BÁO PANDAS UDF (Xử lý Vectorized siêu tốc bằng Arrow)
 @pandas_udf(StringType())

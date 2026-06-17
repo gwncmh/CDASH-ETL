@@ -1,0 +1,69 @@
+[2026-06-11T16:33:24.783+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_gold manual__2026-06-11T16:20:50.108333+00:00 [queued]>
+[2026-06-11T16:33:24.793+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: crime_analytics_pipeline.etl_gold manual__2026-06-11T16:20:50.108333+00:00 [queued]>
+[2026-06-11T16:33:24.794+0000] {taskinstance.py:2170} INFO - Starting attempt 2 of 2
+[2026-06-11T16:33:24.810+0000] {taskinstance.py:2191} INFO - Executing <Task(DataprocSubmitJobOperator): etl_gold> on 2026-06-11 16:20:50.108333+00:00
+[2026-06-11T16:33:24.818+0000] {standard_task_runner.py:60} INFO - Started process 738 to run task
+[2026-06-11T16:33:24.823+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'crime_analytics_pipeline', 'etl_gold', 'manual__2026-06-11T16:20:50.108333+00:00', '--job-id', '786', '--raw', '--subdir', 'DAGS_FOLDER/dag_crime_pipeline.py', '--cfg-path', '/tmp/tmprul79bjx']
+[2026-06-11T16:33:24.827+0000] {standard_task_runner.py:88} INFO - Job 786: Subtask etl_gold
+[2026-06-11T16:33:24.909+0000] {task_command.py:423} INFO - Running <TaskInstance: crime_analytics_pipeline.etl_gold manual__2026-06-11T16:20:50.108333+00:00 [running]> on host d26a8a58ef02
+[2026-06-11T16:33:25.042+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='cdash-alerts@example.com' AIRFLOW_CTX_DAG_OWNER='crime-analytics' AIRFLOW_CTX_DAG_ID='crime_analytics_pipeline' AIRFLOW_CTX_TASK_ID='etl_gold' AIRFLOW_CTX_EXECUTION_DATE='2026-06-11T16:20:50.108333+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-11T16:20:50.108333+00:00'
+[2026-06-11T16:33:25.045+0000] {dataproc.py:2208} INFO - Submitting job
+[2026-06-11T16:33:25.061+0000] {connection.py:234} WARNING - Connection schemes (type: google_cloud_platform) shall not contain '_' according to RFC3986.
+[2026-06-11T16:33:25.063+0000] {base.py:83} INFO - Using connection ID 'google_cloud_default' for task execution.
+[2026-06-11T16:33:26.863+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 79, in error_remapped_callable
+    return callable_(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/grpc/_channel.py", line 1160, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/grpc/_channel.py", line 1003, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.FAILED_PRECONDITION
+	details = "com.google.cloud.hadoop.services.common.error.DataprocException: Multiple validation errors:
+ - No agent on master node(s) reported to be be active
+ - Unable to submit job, cluster 'crime-etl-cluster' is in state ERROR and cannot accept jobs. (FAILED_PRECONDITION) (CONFIG)"
+	debug_error_string = "UNKNOWN:Error received from peer ipv4:216.239.34.223:443 {created_time:"2026-06-11T16:33:26.861271453+00:00", grpc_status:9, grpc_message:"com.google.cloud.hadoop.services.common.error.DataprocException: Multiple validation errors:\n - No agent on master node(s) reported to be be active\n - Unable to submit job, cluster \'crime-etl-cluster\' is in state ERROR and cannot accept jobs. (FAILED_PRECONDITION) (CONFIG)"}"
+>
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/operators/dataproc.py", line 2210, in execute
+    job_object = self.hook.submit_job(
+                 ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/common/hooks/base_google.py", line 477, in inner_wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/providers/google/cloud/hooks/dataproc.py", line 791, in submit_job
+    return client.submit_job(
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/cloud/dataproc_v1/services/job_controller/client.py", line 547, in submit_job
+    response = rpc(
+               ^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/gapic_v1/method.py", line 131, in __call__
+    return wrapped_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/retry.py", line 372, in retry_wrapped_func
+    return retry_target(
+           ^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/retry.py", line 207, in retry_target
+    result = target()
+             ^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/google/api_core/grpc_helpers.py", line 81, in error_remapped_callable
+    raise exceptions.from_grpc_error(exc) from exc
+google.api_core.exceptions.FailedPrecondition: 400 com.google.cloud.hadoop.services.common.error.DataprocException: Multiple validation errors:
+ - No agent on master node(s) reported to be be active
+ - Unable to submit job, cluster 'crime-etl-cluster' is in state ERROR and cannot accept jobs. (FAILED_PRECONDITION) (CONFIG)
+[2026-06-11T16:33:26.893+0000] {taskinstance.py:1138} INFO - Marking task as FAILED. dag_id=crime_analytics_pipeline, task_id=etl_gold, execution_date=20260611T162050, start_date=20260611T163324, end_date=20260611T163326
+[2026-06-11T16:33:26.910+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 786 for task etl_gold (400 com.google.cloud.hadoop.services.common.error.DataprocException: Multiple validation errors:
+ - No agent on master node(s) reported to be be active
+ - Unable to submit job, cluster 'crime-etl-cluster' is in state ERROR and cannot accept jobs. (FAILED_PRECONDITION) (CONFIG); 738)
+[2026-06-11T16:33:26.950+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2026-06-11T16:33:26.990+0000] {taskinstance.py:3280} INFO - 1 downstream tasks scheduled from follow-on schedule check

@@ -142,7 +142,7 @@ def sql_forecast() -> str:
             SELECT MAX(prediction_date)
             FROM `{PROJECT_ID}.{BQ_DATASET}.prediction_results`
         )
-        GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
+        GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17
         ORDER BY pr.crime_probability DESC
     """
 
