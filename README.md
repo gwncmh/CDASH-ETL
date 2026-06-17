@@ -1,7 +1,7 @@
 # CDASH – Crime Data Analytics & Spatial Hotspot Detection System
 
 **Trường Đại học Công nghệ – Đại học Quốc gia Hà Nội**  
-Giảng viên hướng dẫn: PGS.TS. Nguyễn Ngọc Hóa
+Học phần: Kỹ thuật và công nghệ dữ liệu lớn (INT3229E_1)
 
 | Thành viên | MSSV |
 |---|---|
@@ -211,7 +211,7 @@ gs://<your-bucket-name>/
 - Docker & Docker Compose
 - Python 3.10+
 - Git
-- `zip` (Linux/macOS thường có sẵn; Windows dùng WSL)
+- `zip`
 
 ### Bước 1 – Kích hoạt GCP APIs
 
@@ -273,7 +273,7 @@ Script thực hiện tuần tự:
 
 3. **Khởi động Airflow** qua Docker Compose.
 
-> Nếu muốn đóng gói và upload thủ công (bỏ qua script), chạy:
+> Nếu muốn đóng gói và upload thủ công, chạy:
 > ```bash
 > cd scripts/etl
 > zip -r ../../stage3_silver.zip stage3_silver/src/ -x "**/__pycache__/*"
@@ -308,9 +308,6 @@ Tạo Airflow Connection `google_cloud_default`:
 2. Nhấn **Trigger DAG** → truyền config `{"full_load": true}` để nạp dữ liệu từ 2001.
 3. Quá trình full load mất khoảng **8–9 giờ**.
 4. Theo dõi qua **Graph View** trong Airflow UI.
-
-Sau lần đầu, DAG chạy tự động theo lịch **mỗi thứ Bảy 19:00 UTC**
-(tương đương 2:00 SA Chủ Nhật giờ Việt Nam), hoặc trigger thủ công khi cần.
 
 ### Incremental load
 
@@ -389,6 +386,7 @@ một nhóm đặc trưng riêng, sau đó blend kết quả:
 > Sex Offense, Kidnapping, Intimidation.  
 > **Property** gồm: Theft, Burglary, Motor Vehicle Theft, Criminal Damage,
 > Deceptive Practice, Arson.
+
 ### Ngưỡng chất lượng mô hình
 
 | Chỉ số | Ngưỡng tối thiểu |
