@@ -26,14 +26,14 @@ Giảng viên hướng dẫn: PGS.TS. Nguyễn Ngọc Hóa
 
 ## 1. Tổng quan
 
-CDASH là một hệ thống **Data Lakehouse** triển khai trên Google Cloud Platform, giải quyết bài toán phân tích và dự báo tội phạm đô thị theo hướng chủ động. Hệ thống xử lý dữ liệu tội phạm thành phố Chicago từ năm 2001 đến hiện tại, kết hợp với dữ liệu thời tiết, điểm tụ tập (POI) và đặc điểm kinh tế – xã hội để dự báo điểm nóng tội phạm theo ngày.
+CDASH là một hệ thống **Data Lakehouse** triển khai trên Google Cloud Platform, giải quyết bài toán phân tích và dự báo tội phạm đô thị theo hướng chủ động. Hệ thống xử lý dữ liệu tội phạm thành phố Chicago từ năm 2001 đến hiện tại, kết hợp với dữ liệu thời tiết, điểm tụ tập (POI) và đặc điểm kinh tế – xã hội để dự báo điểm nóng tội phạm cùng loại tội phạm chủ đạo theo ngày.
 
 **Phạm vi địa lý:** Thành phố Chicago, bang Illinois, Hoa Kỳ  
 **Môi trường triển khai:** Google Cloud Platform (Google Cloud Storage + Dataproc + BigQuery)
 
 ### Bài toán giải quyết
 
-- **Data Pipeline tự động** – Xử lý hàng chục triệu bản ghi không gian-thời gian với đảm bảo idempotent và tự phục hồi khi lỗi (Airflow retry 2 lần).
+- **Data Pipeline tự động** – Xử lý hàng chục triệu bản ghi không gian-thời gian với đảm bảo idempotent và tự phục hồi khi lỗi (Airflow retry 1 lần).
 - **Tích hợp đa nguồn** – Dữ liệu từ BigQuery Public, thời tiết từ NOAA, điểm tụ tập từ OpenStreetMap, chỉ số kinh tế – xã hội từ ACS Census API.
 - **Dự báo học máy** – Mô hình LightGBM GroupBlend (temporal / spatial / context) dự đoán nguy cơ tội phạm theo ô lưới H3 cho ngày tiếp theo.
 - **Trực quan hóa** – Dashboard KPI 2D (Looker Studio) và bản đồ heatmap 3D tương tác (Kepler.gl).
@@ -71,7 +71,7 @@ Hệ thống theo kiến trúc **Medallion** với 3 tầng triển khai và 6 s
 | 2 | **Bronze Layer** | Validate schema (`MANDATORY_COLUMNS`), parse timestamp (ISO-8601 & Chicago Portal format), partition theo ngày lên GCS |
 | 3 | **Silver Layer** | Chuẩn hóa schema, lọc không gian (bounding box Chicago), lọc thời gian, H3 encoding (resolution 8) bằng Pandas UDF, deduplication bằng Left Anti-Join |
 | 4 | **Gold Layer** | JOIN dữ liệu thời tiết (nearest-station Haversine), điểm tụ tập (H3 hash join), kinh tế – xã hội; tính rolling features; ghi vào BigQuery `enriched_crime_data` |
-| 5 | **Analytics & ML** | Huấn luyện LightGBM GroupBlend (hàng tuần), dự báo điểm nóng (hàng ngày), ghi vào `prediction_results` |
+| 5 | **Analytics & ML** | Huấn luyện LightGBM GroupBlend, dự báo điểm nóng cùng loại tội phạm chủ đạo (theo ngày), ghi vào `prediction_results` |
 | 6 | **Serving** | Flask exporter xuất GeoJSON; Nginx serve dashboard HTML + GeoJSON; Looker Studio + Kepler.gl render |
 
 ### DAG Airflow
@@ -180,7 +180,7 @@ prediction_results       ← Kết quả dự báo LightGBM GroupBlend
 ### Cấu trúc GCS
 
 ```
-gs://cdash-data-lake/
+gs://<your-bucket-name>/
 ├── raw/
 │   ├── chicago_crime/{year}/{month}/{day}/data.csv
 │   ├── chicago_crime/{year}/{month}/{day}/_SUCCESS
@@ -212,17 +212,7 @@ gs://cdash-data-lake/
 - Python 3.10+
 - Git
 
-### Bước 1 – Clone và chạy setup script
-
-```bash
-git clone https://github.com/gwncmh/cdash.git
-cd cdash
-bash scripts/infra/setup.sh
-```
-
-Script tự động: kiểm tra prerequisites, tạo thư mục, tạo GCP Service Account với các quyền `Storage Admin / BigQuery Admin / Dataproc Editor`, upload PySpark scripts lên GCS, và khởi động Airflow.
-
-### Bước 2 – Kích hoạt GCP APIs
+### Bước 1 – Kích hoạt GCP APIs
 
 ```bash
 gcloud services enable storage.googleapis.com \
@@ -230,15 +220,26 @@ gcloud services enable storage.googleapis.com \
                        bigquery.googleapis.com
 ```
 
-### Bước 3 – Tạo hạ tầng GCS và BigQuery
+### Bước 2 – Tạo hạ tầng GCS và BigQuery
 
 ```bash
-gsutil mb -l us-central1 gs://cdash-data-lake
+gsutil mb -l us-central1 gs://<your-bucket-name>
 bq mk --location=US cdash_warehouse
 python config/setup_bq_schema.py
 ```
 
+> Cần thực hiện **trước** khi chạy `setup.sh`, vì script này sẽ upload PySpark scripts trực tiếp vào bucket — nếu bucket chưa tồn tại, lệnh `gsutil cp` sẽ lỗi.
+
+### Bước 3 – Clone repository
+
+```bash
+git clone https://github.com/gwncmh/CDASH-ETL
+cd CDASH-ETL
+```
+
 ### Bước 4 – Cấu hình `config/config.py`
+
+Mở file và sửa trực tiếp các giá trị sau cho đúng project của bạn:
 
 ```python
 GCP_PROJECT_ID = "your-project-id"
@@ -247,18 +248,54 @@ BQ_DATASET     = "cdash_warehouse"
 NOAA_API_TOKEN = "your-noaa-token"   # lấy tại https://www.ncdc.noaa.gov/cdo-web/token
 ```
 
-### Bước 5 – Khởi động Airflow
+> `setup.sh` có bước `sed` để tự thay các giá trị này, nhưng file `config.py` trong repo hiện đã chứa giá trị cứng sẵn (không còn placeholder `YOUR_PROJECT_ID`...), nên `sed` sẽ không khớp được gì. Vì vậy cần **sửa tay** bước này; coi bước `sed` trong `setup.sh` chỉ là dự phòng.
+
+### Bước 5 – Đóng gói và upload PySpark scripts lên GCS
+
+```bash
+cd scripts/etl
+zip -r ../stage3_silver.zip stage3_silver/src
+zip -r ../stage4_gold.zip   stage4_gold/src
+zip -r ../utils.zip         utils
+cd ../..
+
+gsutil cp scripts/etl/stage2_bronze/data_ingestion.py gs://<your-bucket-name>/scripts/stage2_bronze.py
+gsutil cp scripts/etl/stage3_silver/main.py            gs://<your-bucket-name>/scripts/stage3_silver_main.py
+gsutil cp scripts/etl/stage4_gold/main.py              gs://<your-bucket-name>/scripts/stage4_gold_main.py
+gsutil cp scripts/stage3_silver.zip scripts/stage4_gold.zip scripts/utils.zip gs://<your-bucket-name>/scripts/
+gsutil cp scripts/infra/init_pip.sh gs://<your-bucket-name>/scripts/
+```
+
+> `setup.sh` mặc định chỉ upload hai file `etl_clean_crimes.py` và `etl_gis_features.py` — hai file này **không tồn tại** trong codebase hiện tại. Cần thay bằng đúng các file mà `dag_crime_pipeline.py` thực sự tham chiếu (`stage2_bronze`, `stage3_silver_main.py` + `.zip`, `stage4_gold_main.py` + `.zip`, `utils.zip`, `init_pip.sh`) như trên. Thiếu `init_pip.sh` sẽ khiến bước tạo Dataproc cluster thất bại.
+
+### Bước 6 – Tạo GCP Service Account
+
+```bash
+bash scripts/infra/setup.sh
+```
+
+Script sẽ tạo Service Account `airflow-crime-sa` và gán 4 quyền: `Storage Object Admin`, `BigQuery Data Editor`, `BigQuery Job User`, `Dataproc Editor`, đồng thời lưu khóa JSON vào `secrets/gcp-sa-key.json`.
+
+> Lưu ý: với thứ tự hướng dẫn này, các bước upload script trong `setup.sh` (mục [4/6]) sẽ chạy lại nhưng không gây hại — bạn đã upload đúng file ở Bước 5 rồi.
+
+### Bước 7 – Khởi động Airflow và các service serving
 
 ```bash
 docker compose up airflow-init
 docker compose up -d
 ```
 
+Lệnh `up -d` (không chỉ định tên service) sẽ khởi động đủ cả `airflow-webserver`, `airflow-scheduler`, `exporter` và `dashboard` — cần thiết cho phần Vận hành và GeoJSON export ở mục 6.
+
 Truy cập Airflow UI tại `http://localhost:8080` (username: `admin` / password: `admin`).
 
 Tạo Airflow Connection `google_cloud_default`:
 - Conn Type: `Google Cloud`
 - Keyfile Path: `/opt/airflow/secrets/gcp-sa-key.json`
+
+---
+
+⚠️ **Một lưu ý bảo mật ngoài phạm vi "cài đặt":** `config/config.py` đang chứa sẵn `NOAA_API_TOKEN` thật, và `dags/dag_crime_pipeline.py` chứa Census API key thật. `.gitignore` hiện chỉ loại trừ `secrets/`, `*.json`, `.env` — không loại trừ `config.py` — nên hai key này đang bị commit công khai lên GitHub. Nên cân nhắc đổi sang biến môi trường hoặc Secret Manager trước khi public repo.
 
 ---
 
@@ -273,9 +310,9 @@ Tạo Airflow Connection `google_cloud_default`:
 
 Sau lần đầu, mỗi lần khởi động Docker là hệ thống sẽ chạy theo incremental load.
 
-### Incremental load hàng tuần
+### Incremental load
 
-Mỗi lần chạy, pipeline xử lý khoảng **17 ngày dữ liệu** kết thúc ở `execution_date - 5 ngày` (buffer để đảm bảo dữ liệu nguồn ổn định). Deduplication bằng Left Anti-Join trên `unique_key` đảm bảo không ghi trùng.
+Mỗi lần chạy, pipeline xử lý khoảng **17 ngày dữ liệu** kết thúc ở `execution_date - 5 ngày` (buffer do dữ liệu BigQuery không phải theo thời gian thực). Deduplication bằng Left Anti-Join trên `unique_key` đảm bảo không ghi trùng.
 
 ### Giám sát thường nhật
 
