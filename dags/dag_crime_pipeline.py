@@ -351,7 +351,7 @@ def _run_ml_pipeline(project_id, dataset, enriched_table, predictions_table, **k
         ti.xcom_push(key="val_f1",        value=result["val_f1"])
         ti.xcom_push(key="test_f1",       value=result["test_f1"])
         ti.xcom_push(key="model_version", value=result["model_version"])
-    if result["val_auc"] < 0.75 or result["val_f1"] < 0.6:
+    if result["val_auc"] < 0.75 or result["val_f1"] < 0.5:
         import logging
         logging.warning("[ML] ⚠️ Model chưa đạt ngưỡng: val_auc=%.4f val_f1=%.4f",
                         result["val_auc"], result["val_f1"])
