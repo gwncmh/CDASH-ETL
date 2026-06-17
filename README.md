@@ -211,6 +211,7 @@ gs://<your-bucket-name>/
 - Docker & Docker Compose
 - Python 3.10+
 - Git
+- `zip` (Linux/macOS thường có sẵn; Windows dùng WSL)
 
 ### Bước 1 – Kích hoạt GCP APIs
 
@@ -225,10 +226,7 @@ gcloud services enable storage.googleapis.com \
 ```bash
 gsutil mb -l us-central1 gs://<your-bucket-name>
 bq mk --location=US cdash_warehouse
-python config/setup_bq_schema.py
 ```
-
-> Cần thực hiện **trước** khi chạy `setup.sh`, vì script này sẽ upload PySpark scripts trực tiếp vào bucket — nếu bucket chưa tồn tại, lệnh `gsutil cp` sẽ lỗi.
 
 ### Bước 3 – Clone repository
 
@@ -248,55 +246,58 @@ BQ_DATASET     = "cdash_warehouse"
 NOAA_API_TOKEN = "your-noaa-token"   # lấy tại https://www.ncdc.noaa.gov/cdo-web/token
 ```
 
-> `setup.sh` có bước `sed` để tự thay các giá trị này, nhưng file `config.py` trong repo hiện đã chứa giá trị cứng sẵn (không còn placeholder `YOUR_PROJECT_ID`...), nên `sed` sẽ không khớp được gì. Vì vậy cần **sửa tay** bước này; coi bước `sed` trong `setup.sh` chỉ là dự phòng.
+> `setup.sh` tự đọc `GCP_PROJECT_ID` và `GCS_BUCKET` từ file này — chỉ hỏi
+> lại nếu giá trị chưa được điền.
 
-### Bước 5 – Đóng gói và upload PySpark scripts lên GCS
-
-```bash
-cd scripts/etl
-zip -r ../stage3_silver.zip stage3_silver/src
-zip -r ../stage4_gold.zip   stage4_gold/src
-zip -r ../utils.zip         utils
-cd ../..
-
-gsutil cp scripts/etl/stage2_bronze/data_ingestion.py gs://<your-bucket-name>/scripts/stage2_bronze.py
-gsutil cp scripts/etl/stage3_silver/main.py            gs://<your-bucket-name>/scripts/stage3_silver_main.py
-gsutil cp scripts/etl/stage4_gold/main.py              gs://<your-bucket-name>/scripts/stage4_gold_main.py
-gsutil cp scripts/stage3_silver.zip scripts/stage4_gold.zip scripts/utils.zip gs://<your-bucket-name>/scripts/
-gsutil cp scripts/infra/init_pip.sh gs://<your-bucket-name>/scripts/
-```
-
-> `setup.sh` mặc định chỉ upload hai file `etl_clean_crimes.py` và `etl_gis_features.py` — hai file này **không tồn tại** trong codebase hiện tại. Cần thay bằng đúng các file mà `dag_crime_pipeline.py` thực sự tham chiếu (`stage2_bronze`, `stage3_silver_main.py` + `.zip`, `stage4_gold_main.py` + `.zip`, `utils.zip`, `init_pip.sh`) như trên. Thiếu `init_pip.sh` sẽ khiến bước tạo Dataproc cluster thất bại.
-
-### Bước 6 – Tạo GCP Service Account
+### Bước 5 – Chạy setup script
 
 ```bash
 bash scripts/infra/setup.sh
 ```
 
-Script sẽ tạo Service Account `airflow-crime-sa` và gán 4 quyền: `Storage Object Admin`, `BigQuery Data Editor`, `BigQuery Job User`, `Dataproc Editor`, đồng thời lưu khóa JSON vào `secrets/gcp-sa-key.json`.
+Script thực hiện tuần tự:
 
-> Lưu ý: với thứ tự hướng dẫn này, các bước upload script trong `setup.sh` (mục [4/6]) sẽ chạy lại nhưng không gây hại — bạn đã upload đúng file ở Bước 5 rồi.
+1. **Tạo GCP Service Account** `airflow-crime-sa` và gán 4 IAM role:
+   `Storage Object Admin`, `BigQuery Data Editor`, `BigQuery Job User`,
+   `Dataproc Editor`. Khóa JSON được lưu vào `secrets/gcp-sa-key.json`.
 
-### Bước 7 – Khởi động Airflow và các service serving
+2. **Đóng gói và upload PySpark scripts** lên
+   `gs://<your-bucket-name>/scripts/`:
+   - Đóng gói `stage3_silver/src`, `stage4_gold/src` và `utils` thành
+     các file `.zip` (loại bỏ `__pycache__`).
+   - Upload entry-point scripts: `stage2_bronze/data_ingestion.py`,
+     `stage3_silver_main.py`, `stage4_gold_main.py`.
+   - Upload `init_pip.sh` — file khởi tạo dependencies cho Dataproc
+     worker nodes. **Nếu file này chưa tồn tại, script sẽ in hướng dẫn
+     tạo và dừng lại ở bước upload.**
 
-```bash
-docker compose up airflow-init
-docker compose up -d
-```
+3. **Khởi động Airflow** qua Docker Compose.
 
-Lệnh `up -d` (không chỉ định tên service) sẽ khởi động đủ cả `airflow-webserver`, `airflow-scheduler`, `exporter` và `dashboard` — cần thiết cho phần Vận hành và GeoJSON export ở mục 6.
+> Nếu muốn đóng gói và upload thủ công (bỏ qua script), chạy:
+> ```bash
+> cd scripts/etl
+> zip -r ../../stage3_silver.zip stage3_silver/src/ -x "**/__pycache__/*"
+> zip -r ../../stage4_gold.zip   stage4_gold/src/   -x "**/__pycache__/*"
+> zip -r ../../utils.zip         utils/             -x "**/__pycache__/*"
+> cd ../..
+>
+> BUCKET="<your-bucket-name>"
+> gsutil cp scripts/etl/stage2_bronze/data_ingestion.py \
+>            gs://${BUCKET}/scripts/stage2_bronze/data_ingestion.py
+> gsutil cp scripts/etl/stage3_silver/main.py gs://${BUCKET}/scripts/stage3_silver_main.py
+> gsutil cp scripts/etl/stage4_gold/main.py   gs://${BUCKET}/scripts/stage4_gold_main.py
+> gsutil cp stage3_silver.zip stage4_gold.zip utils.zip gs://${BUCKET}/scripts/
+> gsutil cp scripts/infra/init_pip.sh gs://${BUCKET}/scripts/
+> ```
 
-Truy cập Airflow UI tại `http://localhost:8080` (username: `admin` / password: `admin`).
+### Bước 6 – Hoàn tất cấu hình Airflow
+
+Truy cập Airflow UI tại `http://localhost:8080`
+(username: `admin` / password: `admin`).
 
 Tạo Airflow Connection `google_cloud_default`:
-- Conn Type: `Google Cloud`
-- Keyfile Path: `/opt/airflow/secrets/gcp-sa-key.json`
-
----
-
-⚠️ **Một lưu ý bảo mật ngoài phạm vi "cài đặt":** `config/config.py` đang chứa sẵn `NOAA_API_TOKEN` thật, và `dags/dag_crime_pipeline.py` chứa Census API key thật. `.gitignore` hiện chỉ loại trừ `secrets/`, `*.json`, `.env` — không loại trừ `config.py` — nên hai key này đang bị commit công khai lên GitHub. Nên cân nhắc đổi sang biến môi trường hoặc Secret Manager trước khi public repo.
-
+- **Conn Type**: `Google Cloud`
+- **Keyfile Path**: `/opt/airflow/secrets/gcp-sa-key.json`
 ---
 
 ## 6. Vận hành
@@ -305,14 +306,18 @@ Tạo Airflow Connection `google_cloud_default`:
 
 1. Vào Airflow UI → DAG `crime_analytics_pipeline` → bật **Unpause**.
 2. Nhấn **Trigger DAG** → truyền config `{"full_load": true}` để nạp dữ liệu từ 2001.
-3. Quá trình full load mất khoảng **8-9 giờ**.
+3. Quá trình full load mất khoảng **8–9 giờ**.
 4. Theo dõi qua **Graph View** trong Airflow UI.
 
-Sau lần đầu, mỗi lần khởi động Docker là hệ thống sẽ chạy theo incremental load.
+Sau lần đầu, DAG chạy tự động theo lịch **mỗi thứ Bảy 19:00 UTC**
+(tương đương 2:00 SA Chủ Nhật giờ Việt Nam), hoặc trigger thủ công khi cần.
 
 ### Incremental load
 
-Mỗi lần chạy, pipeline xử lý khoảng **17 ngày dữ liệu** kết thúc ở `execution_date - 5 ngày` (buffer do dữ liệu BigQuery không phải theo thời gian thực). Deduplication bằng Left Anti-Join trên `unique_key` đảm bảo không ghi trùng.
+Mỗi lần chạy, pipeline xử lý khoảng **21 ngày dữ liệu** kết thúc tại
+`execution_date - 5 ngày` (buffer do dữ liệu Chicago Crime trên BigQuery
+Public không cập nhật theo thời gian thực). Deduplication bằng
+Left Anti-Join trên `unique_key` đảm bảo không ghi trùng.
 
 ### Giám sát thường nhật
 
@@ -326,7 +331,8 @@ bq query --use_legacy_sql=false \
 bq query --use_legacy_sql=false \
   "SELECT risk_level, COUNT(*) as n, model_version
    FROM cdash_warehouse.prediction_results
-   WHERE prediction_date = (SELECT MAX(prediction_date) FROM cdash_warehouse.prediction_results)
+   WHERE prediction_date = (SELECT MAX(prediction_date)
+                            FROM cdash_warehouse.prediction_results)
    GROUP BY 1, 3
    ORDER BY 1"
 ```
@@ -341,7 +347,8 @@ curl -X POST http://localhost:5000/export/all
 curl http://localhost:5000/status
 ```
 
-File được ghi vào `/exports/` và được Nginx serve tại `http://localhost:3000/exports/`.
+File được ghi vào `/exports/` và được Nginx serve tại
+`http://localhost:3000/exports/`.
 
 ---
 
@@ -349,7 +356,8 @@ File được ghi vào `/exports/` và được Nginx serve tại `http://localh
 
 ### Kiến trúc GroupBlend (v24)
 
-Pipeline ML huấn luyện **3 mô hình LightGBM độc lập**, mỗi mô hình sử dụng một nhóm đặc trưng riêng, sau đó blend kết quả:
+Pipeline ML huấn luyện **3 mô hình LightGBM độc lập**, mỗi mô hình sử dụng
+một nhóm đặc trưng riêng, sau đó blend kết quả:
 
 | Nhóm | Trọng số | Loại đặc trưng |
 |---|---|---|
@@ -368,6 +376,19 @@ Pipeline ML huấn luyện **3 mô hình LightGBM độc lập**, mỗi mô hìn
 | MEDIUM | Top 16–30% |
 | LOW | 70% còn lại |
 
+### Phân loại nhóm tội phạm chủ đạo
+
+| `dominant_type` | Điều kiện |
+|---|---|
+| `VIOLENT` | `p_violent > p_property + 0.05` |
+| `PROPERTY` | `p_property > p_violent + 0.05` |
+| `MIXED` | Hai xác suất chênh nhau ≤ 0.05 |
+| `UNKNOWN` | Ô không được GroupBlend dự báo là hotspot |
+
+> **Violent** gồm: Battery, Assault, Robbery, Homicide, Criminal Sexual Assault,
+> Sex Offense, Kidnapping, Intimidation.  
+> **Property** gồm: Theft, Burglary, Motor Vehicle Theft, Criminal Damage,
+> Deceptive Practice, Arson.
 ### Ngưỡng chất lượng mô hình
 
 | Chỉ số | Ngưỡng tối thiểu |
@@ -375,21 +396,26 @@ Pipeline ML huấn luyện **3 mô hình LightGBM độc lập**, mỗi mô hìn
 | AUC-ROC | ≥ 0.75 |
 | F1-Score | ≥ 0.50 |
 
-Nếu không đạt ngưỡng, Airflow ghi cảnh báo vào log. Mô hình được retrain **mỗi lần chạy** với dữ liệu 320 ngày gần nhất.
+Nếu không đạt ngưỡng, Airflow ghi cảnh báo vào log. Mô hình được retrain
+**mỗi lần chạy** trên 320 ngày gần nhất (trong đó 220 ngày dùng để train,
+phần còn lại chia cho calibration, validation và test).
 
 ### Chống data leakage
 
-- Rolling features tính trên `shift(-1)` (không đếm vụ án hiện tại).
-- Spatial prior (`h3_train_*`, `comm_train_*`) chỉ tính trên tập train, không leak sang val/test.
+- Rolling features sử dụng `shift(1)` — chỉ nhìn vào lịch sử trước ngày
+  hiện tại, không dùng thông tin của ngày đang dự báo.
+- Window trong Stage 4 dùng `rangeBetween(-N_seconds, -1)` — không đếm
+  vụ án của chính timestamp hiện tại.
+- Spatial prior (`h3_train_*`, `comm_train_*`) chỉ tính trên tập train,
+  không leak sang val/test.
 - Assertion kiểm tra overlap giữa các split trước khi huấn luyện.
-
 ---
 
 ## 8. Xử lý lỗi
 
 | Lỗi | Nguyên nhân | Cách khắc phục |
 |---|---|---|
-| Task Ingestion thất bại | API nguồn gián đoạn (NOAA / BigQuery Public) | Kiểm tra log, chờ nguồn phục hồi; Airflow tự retry 3 lần |
+| Task Ingestion thất bại | API nguồn gián đoạn (NOAA / BigQuery Public) | Kiểm tra log, chờ nguồn phục hồi; Airflow tự retry 1 lần |
 | `_SUCCESS` marker không tồn tại | Stage 1 chưa hoàn thành | Chạy lại `ingest_chicago_crime` thủ công với `--overwrite` |
 | Stage 3 không có partition mới | Dữ liệu Bronze chưa có trong khoảng ngày | Kiểm tra Bronze GCS path, chạy lại Stage 2 |
 | Spark job OOM Error | Dữ liệu tăng đột biến | Tăng `spark.executor.memory` trong `CLUSTER_CONFIG` hoặc thêm worker |
